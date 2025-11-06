@@ -6,8 +6,9 @@ export type RecordingState = 'idle' | 'recording' | 'playing' | 'stopped';
 
 export interface VoiceCommand {
   command: string;
-  action: 'START_RECORDING' | 'STOP_RECORDING' | 'PLAY_RECORDING' | 'SWITCH_LANGUAGE';
+  action: 'START_RECORDING' | 'STOP_RECORDING' | 'PLAY_RECORDING' | 'SWITCH_LANGUAGE' | 'SAVE_NOTE' | 'OPEN_SAVED_NOTES' | 'NEW_NOTE' | 'PLAY_SAVED_NOTE';
   language?: Language;
+  parameter?: string; // For commands like "play note: meeting notes"
 }
 
 export interface AudioRecording {
@@ -16,6 +17,20 @@ export interface AudioRecording {
   duration: number;
   transcript?: string;
   createdAt: Date;
+}
+
+export interface SavedNote {
+  id: string;
+  title: string;
+  transcript: string;
+  audioBlob?: Blob;
+  audioUrl?: string;
+  duration: number;
+  createdAt: Date;
+  updatedAt: Date;
+  language: Language;
+  topics?: string[]; // AI-generated topics
+  summary?: string; // AI-generated summary
 }
 
 export interface TranslationStrings {
@@ -31,6 +46,10 @@ export interface TranslationStrings {
     stopRecording: string;
     playRecording: string;
     switchLanguage: string;
+    saveNote: string;
+    openNotes: string;
+    newNote: string;
+    playNote: string;
   };
   messages: {
     microphoneAccess: string;

@@ -1,13 +1,23 @@
 import React from 'react';
 import './App.css';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import VoiceRecorder from './components/VoiceRecorder';
+import { ThemeToggle } from './components/ThemeToggle';
 
 function App() {
   return (
-    <LanguageProvider>
-      <VoiceRecorder />
-    </LanguageProvider>
+    <ThemeProvider>
+      <LanguageProvider>
+        <div className="relative min-h-screen">
+          {/* Theme Toggle - Fixed Position */}
+          <ThemeToggle />
+          
+          {/* Main Content */}
+          <VoiceRecorder />
+        </div>
+      </LanguageProvider>
+    </ThemeProvider>
   );
 }
 

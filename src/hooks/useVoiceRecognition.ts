@@ -66,20 +66,21 @@ export const useVoiceRecognition = ({
       let interimTranscript = '';
       let finalTranscript = '';
 
+      // Get only the latest result (from resultIndex onwards)
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcriptPiece = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          finalTranscript += transcriptPiece + ' ';
+          finalTranscript += transcriptPiece;
         } else {
           interimTranscript += transcriptPiece;
         }
       }
 
+      // Send only the new piece to the callback
       const currentTranscript = finalTranscript || interimTranscript;
-      setTranscript(currentTranscript);
-
-      if (onTranscript) {
-        onTranscript(currentTranscript, !!finalTranscript);
+      
+      if (onTranscript && currentTranscript) {
+        onTranscript(currentTranscript.trim(), !!finalTranscript);
       }
     };
 

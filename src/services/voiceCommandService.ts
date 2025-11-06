@@ -14,7 +14,7 @@ const commandMap: { [key: string]: VoiceCommand['action'] } = {
   'dur': 'STOP_RECORDING',
   'durdur': 'STOP_RECORDING',
   
-  // Play recording commands
+  // Play current recording commands
   'play': 'PLAY_RECORDING',
   'oynat': 'PLAY_RECORDING',
   'çal': 'PLAY_RECORDING',
@@ -26,6 +26,38 @@ const commandMap: { [key: string]: VoiceCommand['action'] } = {
   'dil degistir': 'SWITCH_LANGUAGE',
   'dili değiştir': 'SWITCH_LANGUAGE',
   'dili degistir': 'SWITCH_LANGUAGE',
+  
+  // Save note commands
+  'save note': 'SAVE_NOTE',
+  'notu kaydet': 'SAVE_NOTE',
+  'kaydet': 'SAVE_NOTE',
+  'save': 'SAVE_NOTE',
+  
+  // Open saved notes commands
+  'open saved notes': 'OPEN_SAVED_NOTES',
+  'open notes': 'OPEN_SAVED_NOTES',
+  'show notes': 'OPEN_SAVED_NOTES',
+  'kayıtlı notları aç': 'OPEN_SAVED_NOTES',
+  'kayitli notlari ac': 'OPEN_SAVED_NOTES',
+  'notları aç': 'OPEN_SAVED_NOTES',
+  'notlari ac': 'OPEN_SAVED_NOTES',
+  'notları göster': 'OPEN_SAVED_NOTES',
+  'notlari goster': 'OPEN_SAVED_NOTES',
+  
+  // New note commands
+  'new note': 'NEW_NOTE',
+  'create new note': 'NEW_NOTE',
+  'yeni not': 'NEW_NOTE',
+  'yeni not oluştur': 'NEW_NOTE',
+  'yeni not olustur': 'NEW_NOTE',
+  
+  // Play saved note commands
+  'play note': 'PLAY_SAVED_NOTE',
+  'notu oynat': 'PLAY_SAVED_NOTE',
+  'notu çal': 'PLAY_SAVED_NOTE',
+  'notu cal': 'PLAY_SAVED_NOTE',
+  'şu notu oynat': 'PLAY_SAVED_NOTE',
+  'su notu oynat': 'PLAY_SAVED_NOTE',
 };
 
 /**
