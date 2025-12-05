@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RecordingState, SavedNote as SavedNoteType } from '../types';
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
@@ -6,457 +6,522 @@ import { useLanguage } from '../hooks/useLanguage';
 import { parseVoiceCommand } from '../services/voiceCommandService';
 import { speak } from '../services/audioService';
 import { saveNote } from '../services/storageService';
-import { parseAIVoiceCommand, findNoteByName } from '../services/aiVoiceCommandService';
 import RecordingControls from './RecordingControls';
 import TranscriptionDisplay from './TranscriptionDisplay';
 import SaveControls from './SaveControls';
 import SavedNotes from './SavedNotes';
 
 const VoiceRecorder: React.FC = () => {
-  const { language, toggleLanguage, t } = useLanguage();
-  const [recordingState, setRecordingState] = useState<RecordingState>('idle');
-  const [lastTranscript, setLastTranscript] = useState<string>('');
-  const [accumulatedTranscript, setAccumulatedTranscript] = useState<string>(''); // All final transcripts
-  const [showSavedNotes, setShowSavedNotes] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [currentNote, setCurrentNote] = useState<SavedNoteType | null>(null);
+    const { language, toggleLanguage, t } = useLanguage();
+    const [recordingState, setRecordingState] = useState<RecordingState>('idle');
+    const [lastTranscript, setLastTranscript] = useState<string>('');
+    const [accumulatedTranscript, setAccumulatedTranscript] = useState<string>('');
+    const [showSavedNotes, setShowSavedNotes] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState(false);
+    const [currentNote, setCurrentNote] = useState<SavedNoteType | null>(null);
+    const [recordingDuration, setRecordingDuration] = useState(0);
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const {
-    startRecording,
-    stopRecording,
-    playRecording,
-    isRecording,
-    isPlaying,
-    recording,
-    error: recordingError,
-  } = useAudioRecorder();
+    // Use refs for values that need to be accessed in callbacks without causing re-renders
+    const isRecordingRef = useRef(false);
+    const lastTranscriptRef = useRef('');
+    const accumulatedTranscriptRef = useRef('');
+    const recordingRef = useRef<typeof recording>(null);
 
-  // Handle saving note
-  const handleSaveNote = useCallback(async (title: string) => {
-    if (!lastTranscript) return;
+    const {
+        startRecording,
+        stopRecording,
+        playRecording,
+        isRecording,
+        isPlaying,
+        recording,
+        error: recordingError,
+    } = useAudioRecorder();
 
-    try {
-      const savedNote = await saveNote(lastTranscript, recording, language, title);
-      setSaveSuccess(true);
-      setCurrentNote(savedNote);
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => setSaveSuccess(false), 3000);
-      
-      const langCode = language === 'en' ? 'en-US' : 'tr-TR';
-      speak(language === 'en' ? 'Note saved successfully' : 'Not başarıyla kaydedildi', langCode);
-    } catch (error) {
-      console.error('Error saving note:', error);
-      alert(language === 'en' ? 'Failed to save note' : 'Not kaydedilemedi');
-    }
-  }, [lastTranscript, recording, language]);
+    // Keep refs in sync with state
+    useEffect(() => {
+        isRecordingRef.current = isRecording;
+    }, [isRecording]);
 
-  // Handle loading a saved note
-  const handleNoteSelect = useCallback((note: SavedNoteType) => {
-    setCurrentNote(note);
-    setLastTranscript(note.transcript);
-    
-    // If note has audio, create a recording object
-    if (note.audioBlob && note.audioUrl) {
-      // Note: This sets the recording but doesn't update the recorder hook state
-      // The user can still play it through the recording controls if needed
-    }
-  }, []);
+    useEffect(() => {
+        lastTranscriptRef.current = lastTranscript;
+    }, [lastTranscript]);
 
-  // Handle creating a new note
-  const handleNewNote = useCallback(() => {
-    setCurrentNote(null);
-    setLastTranscript('');
-    setAccumulatedTranscript('');
-    setRecordingState('idle');
-  }, []);
+    useEffect(() => {
+        accumulatedTranscriptRef.current = accumulatedTranscript;
+    }, [accumulatedTranscript]);
 
-  // Handle voice transcript and commands
-  const handleTranscript = useCallback(
-    (transcript: string, isFinal: boolean) => {
-      // Update transcript display - accumulate text during recording
-      if (isRecording) {
-        if (isFinal) {
-          // Add final transcript to accumulated text
-          setAccumulatedTranscript(prev => {
-            const newText = prev ? `${prev} ${transcript}` : transcript;
-            const finalText = newText.trim();
-            // Update lastTranscript to show accumulated
-            setLastTranscript(finalText);
-            return finalText;
-          });
+    useEffect(() => {
+        recordingRef.current = recording;
+        console.log('Recording updated:', recording ? 'has recording' : 'no recording');
+    }, [recording]);
+
+    // Recording timer
+    useEffect(() => {
+        if (isRecording) {
+            setRecordingDuration(0);
+            timerRef.current = setInterval(() => {
+                setRecordingDuration(prev => prev + 1);
+            }, 1000);
         } else {
-          // Show interim results temporarily alongside accumulated
-          setLastTranscript(() => {
-            // Get current accumulated state and add interim
-            const acc = accumulatedTranscript;
-            return acc ? `${acc} ${transcript}`.trim() : transcript.trim();
-          });
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
+            }
         }
-      }
-
-      // First, try AI-powered commands for specific note actions
-      if (!isRecording) {
-        parseAIVoiceCommand(transcript, language).then(aiCommand => {
-          if (aiCommand.action === 'PLAY_SPECIFIC_NOTE' && aiCommand.noteQuery) {
-            findNoteByName(aiCommand.noteQuery, language).then(foundNote => {
-              if (foundNote && foundNote.audioUrl) {
-                const audio = new Audio(foundNote.audioUrl);
-                audio.play();
-                const langCode = language === 'en' ? 'en-US' : 'tr-TR';
-                speak(
-                  language === 'en' 
-                    ? `Playing ${foundNote.title}` 
-                    : `${foundNote.title} oynatılıyor`,
-                  langCode
-                );
-              } else {
-                const langCode = language === 'en' ? 'en-US' : 'tr-TR';
-                speak(
-                  language === 'en' 
-                    ? `Note "${aiCommand.noteQuery}" not found or has no audio` 
-                    : `"${aiCommand.noteQuery}" notu bulunamadı veya ses kaydı yok`,
-                  langCode
-                );
-              }
-            });
-            return; // Don't process other commands
-          }
-        }).catch(err => console.error('AI command error:', err));
-      }
-
-      // Parse and handle standard voice commands
-      const command = parseVoiceCommand(transcript);
-      if (command) {
-        console.log('Voice command detected:', command);
-
-        switch (command.action) {
-          case 'START_RECORDING':
-            if (!isRecording && !isPlaying) {
-              startRecording();
-              const langCode = language === 'en' ? 'en-US' : 'tr-TR';
-              speak(t.messages.recordingStarted, langCode);
+        return () => {
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
             }
-            break;
+        };
+    }, [isRecording]);
 
-          case 'STOP_RECORDING':
-            if (isRecording) {
-              stopRecording();
-              const langCode = language === 'en' ? 'en-US' : 'tr-TR';
-              speak(t.messages.recordingStopped, langCode);
-            }
-            break;
+    const formatTime = (seconds: number): string => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
 
-          case 'PLAY_RECORDING':
-            if (!isRecording && !isPlaying && recording) {
-              playRecording();
-              const langCode = language === 'en' ? 'en-US' : 'tr-TR';
-              speak(t.messages.playingRecording, langCode);
-            } else if (!recording) {
-              const langCode = language === 'en' ? 'en-US' : 'tr-TR';
-              speak(t.messages.noRecording, langCode);
-            }
-            break;
+    // Handle saving note
+    const handleSaveNote = useCallback(async (title?: string) => {
+        const transcript = lastTranscriptRef.current;
+        if (!transcript) return;
 
-          case 'SWITCH_LANGUAGE':
-            toggleLanguage();
-            break;
+        try {
+            // Pass undefined title to let storageService auto-generate from transcript
+            const savedNote = await saveNote(transcript, recording, language, title);
+            setSaveSuccess(true);
+            setCurrentNote(savedNote);
 
-          case 'SAVE_NOTE':
-            if (lastTranscript && !isRecording) {
-              handleSaveNote(`Note ${new Date().toLocaleString()}`);
-              const langCode = language === 'en' ? 'en-US' : 'tr-TR';
-              speak(language === 'en' ? 'Saving note' : 'Not kaydediliyor', langCode);
-            }
-            break;
+            setTimeout(() => setSaveSuccess(false), 3000);
 
-          case 'OPEN_SAVED_NOTES':
-            if (!isRecording) {
-              setShowSavedNotes(true);
-              const langCode = language === 'en' ? 'en-US' : 'tr-TR';
-              speak(language === 'en' ? 'Opening saved notes' : 'Kayıtlı notlar açılıyor', langCode);
-            }
-            break;
-
-          case 'NEW_NOTE':
-            if (!isRecording) {
-              handleNewNote();
-              const langCode = language === 'en' ? 'en-US' : 'tr-TR';
-              speak(language === 'en' ? 'Starting new note' : 'Yeni not başlatılıyor', langCode);
-            }
-            break;
-
-          case 'PLAY_SAVED_NOTE':
-            if (currentNote && currentNote.audioUrl && !isRecording) {
-              // Play the current note's audio if available
-              const audio = new Audio(currentNote.audioUrl);
-              audio.play();
-              const langCode = language === 'en' ? 'en-US' : 'tr-TR';
-              speak(language === 'en' ? 'Playing saved note' : 'Kaydedilen not oynatılıyor', langCode);
-            } else if (!currentNote) {
-              const langCode = language === 'en' ? 'en-US' : 'tr-TR';
-              speak(language === 'en' ? 'No note is open' : 'Açık not yok', langCode);
-            }
-            break;
-
-          default:
-            break;
+            const langCode = language === 'en' ? 'en-US' : 'tr-TR';
+            speak(language === 'en' ? 'Note saved successfully' : 'Not başarıyla kaydedildi', langCode);
+        } catch (error) {
+            console.error('Error saving note:', error);
+            alert(language === 'en' ? 'Failed to save note' : 'Not kaydedilemedi');
         }
-      }
-    },
-    [
-      isRecording,
-      isPlaying,
-      recording,
-      startRecording,
-      stopRecording,
-      playRecording,
-      toggleLanguage,
-      language,
-      t,
-      lastTranscript,
-      currentNote,
-      handleSaveNote,
-      handleNewNote,
-      accumulatedTranscript,
-    ]
-  );
+    }, [recording, language]);
 
-  // Initialize voice recognition (always listening for commands)
-  const { isListening, startListening, error: voiceError } = useVoiceRecognition({
-    onTranscript: handleTranscript,
-    continuous: true,
-    interimResults: true,
-    language: 'en-US', // We use en-US but recognize commands in both languages
-  });
+    // Handle loading a saved note
+    const handleNoteSelect = useCallback((note: SavedNoteType) => {
+        setCurrentNote(note);
+        setLastTranscript(note.transcript);
+    }, []);
 
-  // Auto-start voice recognition on mount
-  useEffect(() => {
-    // Small delay to ensure everything is initialized
-    const timer = setTimeout(() => {
-      startListening();
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [startListening]);
-
-  // Update recording state
-  useEffect(() => {
-    if (isRecording) {
-      setRecordingState('recording');
-    } else if (isPlaying) {
-      setRecordingState('playing');
-    } else if (recording) {
-      setRecordingState('stopped');
-    } else {
-      setRecordingState('idle');
-    }
-  }, [isRecording, isPlaying, recording]);
-
-  // Clear transcript when starting a new recording
-  useEffect(() => {
-    if (isRecording) {
-      // Clear accumulated transcript when starting new recording
-      setAccumulatedTranscript('');
-    }
-  }, [isRecording]);
-
-  // Keep transcript visible after recording stops
-  useEffect(() => {
-    if (!isRecording && recordingState === 'idle' && !recording) {
-      // Only clear if we're back to idle with no recording
-      const timer = setTimeout(() => {
+    // Handle creating a new note
+    const handleNewNote = useCallback(() => {
+        setCurrentNote(null);
         setLastTranscript('');
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [isRecording, recordingState, recording]);
+        setAccumulatedTranscript('');
+        setRecordingState('idle');
+    }, []);
 
-  // Announce language switch
-  useEffect(() => {
-    const langCode = language === 'en' ? 'en-US' : 'tr-TR';
-    const timer = setTimeout(() => {
-      speak(t.messages.languageSwitched, langCode);
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [language, t.messages.languageSwitched]);
+    // Handle voice transcript and commands
+    const handleTranscript = useCallback(
+        (transcript: string, isFinal: boolean) => {
+            const currentIsRecording = isRecordingRef.current;
 
-  // Display errors
-  useEffect(() => {
-    if (recordingError || voiceError) {
-      console.error('Error:', recordingError || voiceError);
-    }
-  }, [recordingError, voiceError]);
+            // Update transcript display during recording
+            if (currentIsRecording) {
+                if (isFinal) {
+                    setAccumulatedTranscript(prev => {
+                        const newText = prev ? `${prev} ${transcript}` : transcript;
+                        const finalText = newText.trim();
+                        setLastTranscript(finalText);
+                        accumulatedTranscriptRef.current = finalText;
+                        lastTranscriptRef.current = finalText;
+                        return finalText;
+                    });
+                } else {
+                    const acc = accumulatedTranscriptRef.current;
+                    const newTranscript = acc ? `${acc} ${transcript}`.trim() : transcript.trim();
+                    setLastTranscript(newTranscript);
+                    lastTranscriptRef.current = newTranscript;
+                }
+            }
 
-  return (
-    <div
-      className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-blue-50 dark:from-gray-950 dark:via-slate-900 dark:to-gray-900 flex flex-col items-center justify-start p-8 transition-all duration-500"
-      role="main"
-      aria-label={t.accessibility.mainRegion}
-    >
-      {/* Animated Background Blobs */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 -left-4 w-72 h-72 bg-blue-200 dark:bg-blue-900 rounded-full mix-blend-multiply dark:mix-blend-soft-light filter blur-xl opacity-40 animate-float" />
-        <div className="absolute top-0 -right-4 w-72 h-72 bg-slate-200 dark:bg-slate-800 rounded-full mix-blend-multiply dark:mix-blend-soft-light filter blur-xl opacity-40 animate-float animation-delay-2000" />
-        <div className="absolute -bottom-8 left-20 w-72 h-72 bg-gray-200 dark:bg-gray-800 rounded-full mix-blend-multiply dark:mix-blend-soft-light filter blur-xl opacity-40 animate-float animation-delay-4000" />
-      </div>
+            // Parse and handle voice commands - always process these
+            const command = parseVoiceCommand(transcript);
+            if (command) {
+                console.log('Voice command detected:', command, 'isRecording:', currentIsRecording);
 
-      {/* Content Container */}
-      <div className="relative z-10 w-full max-w-6xl mx-auto">
-        {/* Header */}
-        <header className="w-full mb-8 animate-fade-in">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-4xl md:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-slate-700 via-blue-700 to-slate-700 dark:from-slate-200 dark:via-blue-400 dark:to-slate-200 uppercase tracking-wider">
-              {t.appTitle}
-            </h1>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleNewNote}
-                className="p-3 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 hover:bg-blue-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                title={language === 'en' ? 'New Note' : 'Yeni Not'}
-              >
-                <svg className="w-6 h-6 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              </button>
-              <button
-                onClick={() => setShowSavedNotes(true)}
-                className="p-3 bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 hover:bg-blue-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                title={language === 'en' ? 'Saved Notes' : 'Kaydedilen Notlar'}
-              >
-                <svg className="w-6 h-6 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </button>
+                switch (command.action) {
+                    case 'START_RECORDING':
+                        if (!currentIsRecording && !isPlaying) {
+                            startRecording();
+                            const langCode = language === 'en' ? 'en-US' : 'tr-TR';
+                            speak(t.messages.recordingStarted, langCode);
+                        }
+                        break;
+
+                    case 'STOP_RECORDING':
+                        if (currentIsRecording) {
+                            stopRecording();
+                            const langCode = language === 'en' ? 'en-US' : 'tr-TR';
+                            speak(t.messages.recordingStopped, langCode);
+                        }
+                        break;
+
+                    case 'PLAY_RECORDING':
+                        const currentRecording = recordingRef.current;
+                        console.log('Play command - recording:', currentRecording ? 'exists' : 'null');
+                        if (!currentIsRecording && !isPlaying && currentRecording) {
+                            playRecording();
+                            const langCode = language === 'en' ? 'en-US' : 'tr-TR';
+                            speak(t.messages.playingRecording, langCode);
+                        } else if (!currentRecording) {
+                            const langCode = language === 'en' ? 'en-US' : 'tr-TR';
+                            speak(t.messages.noRecording, langCode);
+                        }
+                        break;
+
+                    case 'SWITCH_LANGUAGE':
+                        toggleLanguage();
+                        break;
+
+                    case 'SAVE_NOTE':
+                        if (lastTranscriptRef.current && !currentIsRecording) {
+                            handleSaveNote(); // Auto-generate title from transcript
+                            const langCode = language === 'en' ? 'en-US' : 'tr-TR';
+                            speak(language === 'en' ? 'Saving note' : 'Not kaydediliyor', langCode);
+                        }
+                        break;
+
+                    case 'OPEN_SAVED_NOTES':
+                        if (!currentIsRecording) {
+                            setShowSavedNotes(true);
+                            const langCode = language === 'en' ? 'en-US' : 'tr-TR';
+                            speak(language === 'en' ? 'Opening saved notes' : 'Kayıtlı notlar açılıyor', langCode);
+                        }
+                        break;
+
+                    case 'NEW_NOTE':
+                        if (!currentIsRecording) {
+                            handleNewNote();
+                            const langCode = language === 'en' ? 'en-US' : 'tr-TR';
+                            speak(language === 'en' ? 'Starting new note' : 'Yeni not başlatılıyor', langCode);
+                        }
+                        break;
+
+                    case 'PLAY_SAVED_NOTE':
+                        if (currentNote && currentNote.audioUrl && !currentIsRecording) {
+                            const audio = new Audio(currentNote.audioUrl);
+                            audio.play();
+                            const langCode = language === 'en' ? 'en-US' : 'tr-TR';
+                            speak(language === 'en' ? 'Playing saved note' : 'Kaydedilen not oynatılıyor', langCode);
+                        } else if (!currentNote) {
+                            const langCode = language === 'en' ? 'en-US' : 'tr-TR';
+                            speak(language === 'en' ? 'No note is open' : 'Açık not yok', langCode);
+                        }
+                        break;
+
+                    default:
+                        break;
+                }
+            }
+        },
+        [
+            isPlaying,
+            startRecording,
+            stopRecording,
+            playRecording,
+            toggleLanguage,
+            language,
+            t,
+            currentNote,
+            handleSaveNote,
+            handleNewNote,
+        ]
+    );
+
+    // Initialize voice recognition
+    const { isListening, startListening, error: voiceError } = useVoiceRecognition({
+        onTranscript: handleTranscript,
+        continuous: true,
+        interimResults: true,
+        language: language === 'en' ? 'en-US' : 'tr-TR',
+    });
+
+    // Auto-start voice recognition on mount
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            startListening();
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [startListening]);
+
+    // Update recording state
+    useEffect(() => {
+        if (isRecording) {
+            setRecordingState('recording');
+        } else if (isPlaying) {
+            setRecordingState('playing');
+        } else if (recording) {
+            setRecordingState('stopped');
+        } else {
+            setRecordingState('idle');
+        }
+    }, [isRecording, isPlaying, recording]);
+
+    // Clear accumulated transcript when starting a new recording
+    useEffect(() => {
+        if (isRecording) {
+            setAccumulatedTranscript('');
+            accumulatedTranscriptRef.current = '';
+        }
+    }, [isRecording]);
+
+    // Keep transcript visible after recording stops
+    useEffect(() => {
+        if (!isRecording && recordingState === 'idle' && !recording) {
+            const timer = setTimeout(() => {
+                setLastTranscript('');
+                lastTranscriptRef.current = '';
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [isRecording, recordingState, recording]);
+
+    // Announce language switch
+    useEffect(() => {
+        const langCode = language === 'en' ? 'en-US' : 'tr-TR';
+        const timer = setTimeout(() => {
+            speak(t.messages.languageSwitched, langCode);
+        }, 100);
+        return () => clearTimeout(timer);
+    }, [language, t.messages.languageSwitched]);
+
+    // Display errors
+    useEffect(() => {
+        if (recordingError || voiceError) {
+            console.error('Error:', recordingError || voiceError);
+        }
+    }, [recordingError, voiceError]);
+
+    // Keyboard shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Space to start/stop recording (when not typing)
+            if (e.code === 'Space' && e.target === document.body) {
+                e.preventDefault();
+                if (isRecordingRef.current) {
+                    stopRecording();
+                } else if (!isPlaying) {
+                    startRecording();
+                }
+            }
+            // P to play
+            if (e.code === 'KeyP' && e.target === document.body && !isRecordingRef.current && recording) {
+                e.preventDefault();
+                playRecording();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isPlaying, recording, startRecording, stopRecording, playRecording]);
+
+    return (
+        <div
+            className="min-h-screen bg-gradient-to-br from-stone-50 via-stone-100 to-stone-50 dark:from-stone-950 dark:via-stone-900 dark:to-stone-950 flex flex-col items-center justify-start p-6 md:p-8 transition-all duration-500"
+            role="main"
+            aria-label={t.accessibility.mainRegion}
+        >
+            {/* Subtle Background Decoration */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute top-0 left-1/4 w-96 h-96 bg-stone-200/30 dark:bg-stone-800/20 rounded-full filter blur-3xl animate-float" />
+                <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-stone-300/20 dark:bg-stone-700/15 rounded-full filter blur-3xl animate-float animation-delay-2000" />
             </div>
-          </div>
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="text-sm uppercase tracking-wide font-semibold text-gray-700 dark:text-gray-300 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm px-4 py-2 rounded-full">
-                {language === 'en' ? 'English' : 'Türkçe'}
-              </span>
-              {isListening ? (
-                <span className="flex items-center gap-2 bg-white dark:bg-gray-800 px-4 py-2 rounded-full shadow-lg backdrop-blur-sm border border-gray-200 dark:border-gray-700">
-                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50" />
-                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                    {language === 'en' ? 'Listening' : 'Dinliyor'}
-                  </span>
-                </span>
-              ) : (
-                <span className="flex items-center gap-2 bg-gray-200 dark:bg-gray-700 px-4 py-2 rounded-full shadow-md">
-                  <span className="w-2 h-2 bg-gray-400 rounded-full" />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">
-                    {language === 'en' ? 'Starting...' : 'Başlatılıyor...'}
-                  </span>
-                </span>
-              )}
+
+            {/* Content Container */}
+            <div className="relative z-10 w-full max-w-5xl mx-auto">
+                {/* Header */}
+                <header className="w-full mb-8 animate-fade-in">
+                    <div className="flex items-center justify-between mb-6">
+                        <h1 className="text-3xl md:text-5xl font-bold text-stone-800 dark:text-stone-100 tracking-tight">
+                            {t.appTitle}
+                        </h1>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={handleNewNote}
+                                className="p-3 bg-white dark:bg-stone-800 rounded-xl shadow-soft hover:shadow-soft-lg transition-all duration-200 hover:-translate-y-0.5 border border-stone-200 dark:border-stone-700"
+                                title={language === 'en' ? 'New Note' : 'Yeni Not'}
+                                aria-label={language === 'en' ? 'New Note' : 'Yeni Not'}
+                            >
+                                <svg className="w-5 h-5 text-stone-600 dark:text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                            </button>
+                            <button
+                                onClick={() => setShowSavedNotes(true)}
+                                className="p-3 bg-white dark:bg-stone-800 rounded-xl shadow-soft hover:shadow-soft-lg transition-all duration-200 hover:-translate-y-0.5 border border-stone-200 dark:border-stone-700"
+                                title={language === 'en' ? 'Saved Notes' : 'Kaydedilen Notlar'}
+                                aria-label={language === 'en' ? 'Saved Notes' : 'Kaydedilen Notlar'}
+                            >
+                                <svg className="w-5 h-5 text-stone-600 dark:text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <span className="text-sm font-medium text-stone-600 dark:text-stone-400 bg-stone-100 dark:bg-stone-800 px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700">
+                                {language === 'en' ? 'English' : 'Türkçe'}
+                            </span>
+                            {isListening ? (
+                                <span className="flex items-center gap-2 bg-white dark:bg-stone-800 px-4 py-2 rounded-xl shadow-soft border border-stone-200 dark:border-stone-700">
+                                    <span className="relative flex h-2 w-2">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                    </span>
+                                    <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
+                                        {language === 'en' ? 'Listening' : 'Dinliyor'}
+                                    </span>
+                                </span>
+                            ) : (
+                                <span className="flex items-center gap-2 bg-stone-100 dark:bg-stone-800 px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700">
+                                    <span className="w-2 h-2 bg-stone-400 rounded-full" />
+                                    <span className="text-sm text-stone-500 dark:text-stone-500">
+                                        {language === 'en' ? 'Starting...' : 'Başlatılıyor...'}
+                                    </span>
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Recording Timer */}
+                        {isRecording && (
+                            <div className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-950/30 rounded-xl border border-red-200 dark:border-red-800/50 animate-fade-in">
+                                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                                <span className="text-lg font-mono font-semibold text-red-600 dark:text-red-400">
+                                    {formatTime(recordingDuration)}
+                                </span>
+                            </div>
+                        )}
+
+                        {currentNote && (
+                            <div className="flex items-center gap-2 bg-stone-100 dark:bg-stone-800 px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700">
+                                <svg className="w-4 h-4 text-stone-500 dark:text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <span className="text-sm font-medium text-stone-700 dark:text-stone-300 truncate max-w-xs">
+                                    {currentNote.title}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                </header>
+
+                {/* Success Message */}
+                {saveSuccess && (
+                    <div className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl flex items-center gap-3 animate-fade-in">
+                        <div className="w-8 h-8 flex items-center justify-center bg-emerald-100 dark:bg-emerald-900/50 rounded-full">
+                            <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                        </div>
+                        <span className="text-emerald-800 dark:text-emerald-200 font-medium">
+                            {language === 'en' ? 'Note saved successfully!' : 'Not başarıyla kaydedildi!'}
+                        </span>
+                    </div>
+                )}
+
+                {/* Transcription Display */}
+                <TranscriptionDisplay transcript={lastTranscript} isRecording={isRecording} />
+
+                {/* Save Controls */}
+                <SaveControls
+                    transcript={lastTranscript}
+                    onSave={handleSaveNote}
+                    disabled={isRecording}
+                />
+
+                {/* Recording Controls */}
+                <div className="mt-8">
+                    <RecordingControls state={recordingState} />
+                </div>
+
+                {/* Error Display */}
+                {(recordingError || voiceError) && (
+                    <div
+                        className="mt-8 card-elevated p-6 border-l-4 border-red-400 dark:border-red-500"
+                        role="alert"
+                    >
+                        <p className="text-lg font-semibold mb-3 flex items-center gap-2 text-stone-800 dark:text-stone-200">
+                            <span className="text-2xl">⚠️</span>
+                            <span>Hata / Error</span>
+                        </p>
+                        <p className="text-stone-600 dark:text-stone-400 mb-4">{recordingError || voiceError}</p>
+                        <div className="text-left text-sm space-y-1.5">
+                            <p className="font-semibold text-stone-700 dark:text-stone-300">Çözüm / Solution:</p>
+                            <ul className="list-disc list-inside space-y-1 text-stone-500 dark:text-stone-500">
+                                <li>Chrome, Edge veya Safari kullanın / Use Chrome, Edge or Safari</li>
+                                <li>Mikrofon iznini verin / Grant microphone permission</li>
+                                <li>Sayfayı yenileyin / Refresh the page</li>
+                                <li>HTTPS kullanıyor olmalısınız / Must use HTTPS</li>
+                            </ul>
+                        </div>
+                    </div>
+                )}
+
+                {/* Browser Warning for Firefox */}
+                {typeof window !== 'undefined' && navigator.userAgent.includes('Firefox') && (
+                    <div
+                        className="mt-8 card-elevated p-6 border-l-4 border-amber-400 dark:border-amber-500"
+                        role="alert"
+                    >
+                        <p className="text-lg font-semibold mb-3 flex items-center gap-2 text-stone-800 dark:text-stone-200">
+                            <span className="text-2xl">⚠️</span>
+                            <span>Tarayıcı Uyarısı / Browser Warning</span>
+                        </p>
+                        <p className="text-stone-600 dark:text-stone-400 mb-2">
+                            Firefox Web Speech API'yi desteklemiyor.
+                        </p>
+                        <p className="text-stone-600 dark:text-stone-400">
+                            Firefox does not support Web Speech API.
+                        </p>
+                        <p className="text-sm mt-3 font-medium text-amber-700 dark:text-amber-400">
+                            Lütfen Chrome, Edge veya Safari kullanın / Please use Chrome, Edge or Safari
+                        </p>
+                    </div>
+                )}
+
+                {/* Footer Instructions */}
+                <footer className="mt-12 pt-6 text-center border-t border-stone-200 dark:border-stone-800">
+                    <div className="flex flex-wrap justify-center gap-4 text-sm text-stone-500 dark:text-stone-500">
+                        <span className="flex items-center gap-2">
+                            <kbd className="px-2 py-1 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 rounded font-mono text-xs border border-stone-200 dark:border-stone-700">
+                                Alt+L
+                            </kbd>
+                            <span>{language === 'en' ? 'Switch language' : 'Dil değiştir'}</span>
+                        </span>
+                        <span className="flex items-center gap-2">
+                            <kbd className="px-2 py-1 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 rounded font-mono text-xs border border-stone-200 dark:border-stone-700">
+                                Space
+                            </kbd>
+                            <span>{language === 'en' ? 'Record/Stop' : 'Kaydet/Durdur'}</span>
+                        </span>
+                        <span className="flex items-center gap-2">
+                            <kbd className="px-2 py-1 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 rounded font-mono text-xs border border-stone-200 dark:border-stone-700">
+                                P
+                            </kbd>
+                            <span>{language === 'en' ? 'Play' : 'Oynat'}</span>
+                        </span>
+                    </div>
+                </footer>
             </div>
-            {currentNote && (
-              <div className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900/30 px-4 py-2 rounded-lg border border-blue-200 dark:border-blue-800">
-                <svg className="w-4 h-4 text-blue-700 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <span className="text-sm font-semibold text-blue-900 dark:text-blue-200 truncate max-w-xs">
-                  {currentNote.title}
-                </span>
-              </div>
+
+            {/* Saved Notes Modal */}
+            {showSavedNotes && (
+                <SavedNotes
+                    onNoteSelect={handleNoteSelect}
+                    onClose={() => setShowSavedNotes(false)}
+                />
             )}
-          </div>
-        </header>
-
-        {/* Success Message */}
-        {saveSuccess && (
-          <div className="mb-4 p-4 bg-green-100 dark:bg-green-900/30 border border-green-500 dark:border-green-500/50 rounded-xl flex items-center gap-3 animate-fade-in">
-            <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            <span className="text-green-900 dark:text-green-200 font-medium">
-              {language === 'en' ? 'Note saved successfully!' : 'Not başarıyla kaydedildi!'}
-            </span>
-          </div>
-        )}
-
-        {/* Transcription Display - Moved to Top */}
-        <TranscriptionDisplay transcript={lastTranscript} isRecording={isRecording} />
-
-        {/* Save Controls */}
-        <SaveControls 
-          transcript={lastTranscript} 
-          onSave={handleSaveNote}
-          disabled={isRecording}
-        />
-
-        {/* Recording Controls */}
-        <div className="mt-8">
-          <RecordingControls state={recordingState} />
         </div>
-
-        {/* Error Display */}
-        {(recordingError || voiceError) && (
-          <div
-            className="mt-8 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-8 rounded-2xl shadow-xl backdrop-blur-sm border border-red-200 dark:border-red-800"
-            role="alert"
-          >
-            <p className="text-2xl font-bold mb-4 flex items-center gap-2">
-              <span className="text-3xl">⚠️</span>
-              <span>Hata / Error</span>
-            </p>
-            <p className="text-xl mb-4 text-gray-700 dark:text-gray-300">{recordingError || voiceError}</p>
-            <div className="text-left text-lg space-y-2">
-              <p className="font-bold">Çözüm / Solution:</p>
-              <ul className="list-disc list-inside space-y-2 text-gray-600 dark:text-gray-400">
-                <li>Chrome, Edge veya Safari kullanın / Use Chrome, Edge or Safari</li>
-                <li>Mikrofon iznini verin / Grant microphone permission</li>
-                <li>Sayfayı yenileyin / Refresh the page</li>
-                <li>HTTPS kullanıyor olmalısınız / Must use HTTPS</li>
-              </ul>
-            </div>
-          </div>
-        )}
-
-        {/* Browser Warning for Firefox */}
-        {typeof window !== 'undefined' && navigator.userAgent.includes('Firefox') && (
-          <div
-            className="mt-8 bg-amber-50 dark:bg-amber-900/20 text-gray-900 dark:text-gray-100 p-8 rounded-2xl shadow-xl backdrop-blur-sm border border-amber-200 dark:border-amber-800"
-            role="alert"
-          >
-            <p className="text-2xl font-bold mb-4 flex items-center gap-2">
-              <span className="text-3xl">⚠️</span>
-              <span>Tarayıcı Uyarısı / Browser Warning</span>
-            </p>
-            <p className="text-xl mb-2">
-              Firefox Web Speech API'yi desteklemiyor.
-            </p>
-            <p className="text-xl">
-              Firefox does not support Web Speech API.
-            </p>
-            <p className="text-lg mt-4 font-bold text-amber-700 dark:text-amber-400">
-              Lütfen Chrome, Edge veya Safari kullanın / Please use Chrome, Edge or Safari
-            </p>
-          </div>
-        )}
-
-        {/* Footer Instructions */}
-        <footer className="mt-12 pt-8 text-center">
-          <p className="text-gray-600 dark:text-gray-400 text-sm">
-            Press{' '}
-            <kbd className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2 py-1 rounded font-mono text-xs shadow-md border border-gray-300 dark:border-gray-700">
-              Alt+L
-            </kbd>{' '}
-            to switch language
-          </p>
-        </footer>
-      </div>
-
-      {/* Saved Notes Modal */}
-      {showSavedNotes && (
-        <SavedNotes
-          onNoteSelect={handleNoteSelect}
-          onClose={() => setShowSavedNotes(false)}
-        />
-      )}
-    </div>
-  );
+    );
 };
 
 export default VoiceRecorder;
-

@@ -7,17 +7,16 @@ export function ThemeToggle() {
   return (
     <button
       onClick={toggleTheme}
-      className="fixed top-6 right-6 z-50 p-4 rounded-full bg-white dark:bg-gray-800 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-4 focus:ring-blue-500 dark:focus:ring-blue-400 group"
+      className="fixed top-5 right-5 z-50 p-3 rounded-xl bg-white dark:bg-stone-800 shadow-soft hover:shadow-soft-lg transition-all duration-300 hover:-translate-y-0.5 border border-stone-200 dark:border-stone-700 group"
       aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
       title={theme === 'light' ? 'Dark Mode' : 'Light Mode'}
     >
       {theme === 'light' ? (
         <svg
-          className="w-6 h-6 text-gray-800 group-hover:rotate-180 transition-transform duration-500"
+          className="w-5 h-5 text-stone-700 group-hover:rotate-12 transition-transform duration-300"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
-          xmlns="http://www.w3.org/2000/svg"
         >
           <path
             strokeLinecap="round"
@@ -28,11 +27,10 @@ export function ThemeToggle() {
         </svg>
       ) : (
         <svg
-          className="w-6 h-6 text-yellow-400 group-hover:rotate-180 transition-transform duration-500"
+          className="w-5 h-5 text-amber-400 group-hover:rotate-12 transition-transform duration-300"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
-          xmlns="http://www.w3.org/2000/svg"
         >
           <path
             strokeLinecap="round"
@@ -45,7 +43,3 @@ export function ThemeToggle() {
     </button>
   );
 }
-
-
-
-

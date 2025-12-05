@@ -22,18 +22,40 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({ state }) => {
     }
   };
 
-  const getStatusColor = () => {
+  const getStatusStyles = () => {
     switch (state) {
       case 'recording':
-        return 'bg-gradient-to-br from-red-500 to-pink-500 shadow-lg shadow-red-500/50';
+        return {
+          ring: 'ring-red-500/20 dark:ring-red-400/20',
+          bg: 'bg-gradient-to-br from-red-500 to-rose-600',
+          shadow: 'shadow-red-500/25',
+          pulse: true
+        };
       case 'playing':
-        return 'bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg shadow-blue-500/50';
+        return {
+          ring: 'ring-stone-400/20 dark:ring-stone-500/20',
+          bg: 'bg-gradient-to-br from-stone-600 to-stone-700 dark:from-stone-400 dark:to-stone-500',
+          shadow: 'shadow-stone-500/25',
+          pulse: false
+        };
       case 'stopped':
-        return 'bg-gradient-to-br from-gray-400 to-gray-600 shadow-lg shadow-gray-500/50';
+        return {
+          ring: 'ring-stone-300/20 dark:ring-stone-600/20',
+          bg: 'bg-gradient-to-br from-stone-400 to-stone-500',
+          shadow: 'shadow-stone-400/20',
+          pulse: false
+        };
       default:
-        return 'bg-gradient-to-br from-purple-500 to-pink-500 shadow-lg shadow-purple-500/50';
+        return {
+          ring: 'ring-stone-200/20 dark:ring-stone-700/20',
+          bg: 'bg-gradient-to-br from-stone-700 to-stone-800 dark:from-stone-200 dark:to-stone-300',
+          shadow: 'shadow-stone-500/20',
+          pulse: false
+        };
     }
   };
+
+  const styles = getStatusStyles();
 
   return (
     <div
@@ -45,44 +67,60 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({ state }) => {
     >
       {/* Visual Status Indicator */}
       <div className="relative flex items-center justify-center">
+        {/* Outer ring */}
+        <div className={`absolute w-36 h-36 rounded-full ring-4 ${styles.ring} transition-all duration-500`} />
+
         {/* Pulsing rings for recording state */}
         {state === 'recording' && (
           <>
-            <div className="absolute w-32 h-32 rounded-full bg-purple-500 dark:bg-purple-400 opacity-20 animate-ping" />
-            <div className="absolute w-40 h-40 rounded-full bg-purple-500 dark:bg-purple-400 opacity-10 animate-pulse-slow" />
+            <div className="absolute w-32 h-32 rounded-full bg-red-500/20 animate-ping" />
+            <div className="absolute w-40 h-40 rounded-full bg-red-500/10 animate-pulse" />
           </>
         )}
-        
-        {/* Main status circle with gradient */}
+
+        {/* Main status circle */}
         <div
-          className={`w-32 h-32 rounded-full ${getStatusColor()} shadow-2xl transition-all duration-500 ${
-            state === 'recording' ? 'scale-110' : 'scale-100'
-          } flex items-center justify-center`}
+          className={`relative w-28 h-28 rounded-full ${styles.bg} shadow-lg ${styles.shadow} transition-all duration-500 ${state === 'recording' ? 'scale-110 animate-recording-pulse' : 'scale-100'
+            } flex items-center justify-center`}
           role="status"
           aria-label={getStatusText()}
         >
-          {state === 'recording' && (
-            <div className="w-20 h-20 bg-red-500 rounded-full animate-pulse" />
+          {/* Inner icon/indicator */}
+          {state === 'recording' ? (
+            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 bg-white rounded-sm" />
+            </div>
+          ) : state === 'playing' ? (
+            <div className="w-16 h-16 flex items-center justify-center">
+              <svg className="w-10 h-10 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+          ) : (
+            <div className="w-16 h-16 flex items-center justify-center">
+              <svg className="w-10 h-10 text-white dark:text-stone-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
+            </div>
           )}
         </div>
       </div>
 
       {/* Status Text */}
       <div className="text-center">
-        <h2 className="text-4xl font-bold text-slate-700 dark:text-slate-200 mb-2 uppercase tracking-wider">
+        <h2 className="text-2xl md:text-3xl font-semibold text-stone-700 dark:text-stone-200 tracking-tight">
           {getStatusText()}
         </h2>
       </div>
 
       {/* Instructions Card */}
-      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-xl p-8 w-full shadow-lg border border-gray-300 dark:border-gray-600 transition-all duration-200">
-        <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6 uppercase tracking-wide flex items-center gap-2">
+      <div className="card p-6 md:p-8 w-full">
+        <h3 className="text-lg font-semibold text-stone-800 dark:text-stone-200 mb-5 flex items-center gap-2">
           <svg
-            className="w-6 h-6"
+            className="w-5 h-5 text-stone-500"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
           >
             <path
               strokeLinecap="round"
@@ -93,37 +131,37 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({ state }) => {
           </svg>
           Voice Commands
         </h3>
-        <ul className="space-y-3 text-gray-700 dark:text-gray-300 text-base">
-          <li className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-            <span className="flex-shrink-0 w-2 h-2 mt-2 bg-blue-600 dark:bg-blue-500 rounded-full" />
+        <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-stone-600 dark:text-stone-400 text-sm">
+          <li className="flex items-center gap-3 p-3 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
+            <span className="w-1.5 h-1.5 bg-stone-400 dark:bg-stone-500 rounded-full flex-shrink-0" />
             <span>{t.instructions.startRecording}</span>
           </li>
-          <li className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-            <span className="flex-shrink-0 w-2 h-2 mt-2 bg-blue-600 dark:bg-blue-500 rounded-full" />
+          <li className="flex items-center gap-3 p-3 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
+            <span className="w-1.5 h-1.5 bg-stone-400 dark:bg-stone-500 rounded-full flex-shrink-0" />
             <span>{t.instructions.stopRecording}</span>
           </li>
-          <li className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-            <span className="flex-shrink-0 w-2 h-2 mt-2 bg-blue-600 dark:bg-blue-500 rounded-full" />
+          <li className="flex items-center gap-3 p-3 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
+            <span className="w-1.5 h-1.5 bg-stone-400 dark:bg-stone-500 rounded-full flex-shrink-0" />
             <span>{t.instructions.playRecording}</span>
           </li>
-          <li className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-            <span className="flex-shrink-0 w-2 h-2 mt-2 bg-green-600 dark:bg-green-500 rounded-full" />
+          <li className="flex items-center gap-3 p-3 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
+            <span className="w-1.5 h-1.5 bg-emerald-500 dark:bg-emerald-400 rounded-full flex-shrink-0" />
             <span>{t.instructions.saveNote}</span>
           </li>
-          <li className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-            <span className="flex-shrink-0 w-2 h-2 mt-2 bg-green-600 dark:bg-green-500 rounded-full" />
+          <li className="flex items-center gap-3 p-3 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
+            <span className="w-1.5 h-1.5 bg-emerald-500 dark:bg-emerald-400 rounded-full flex-shrink-0" />
             <span>{t.instructions.openNotes}</span>
           </li>
-          <li className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-            <span className="flex-shrink-0 w-2 h-2 mt-2 bg-green-600 dark:bg-green-500 rounded-full" />
+          <li className="flex items-center gap-3 p-3 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
+            <span className="w-1.5 h-1.5 bg-emerald-500 dark:bg-emerald-400 rounded-full flex-shrink-0" />
             <span>{t.instructions.newNote}</span>
           </li>
-          <li className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-            <span className="flex-shrink-0 w-2 h-2 mt-2 bg-green-600 dark:bg-green-500 rounded-full" />
+          <li className="flex items-center gap-3 p-3 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
+            <span className="w-1.5 h-1.5 bg-emerald-500 dark:bg-emerald-400 rounded-full flex-shrink-0" />
             <span>{t.instructions.playNote}</span>
           </li>
-          <li className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-            <span className="flex-shrink-0 w-2 h-2 mt-2 bg-blue-600 dark:bg-blue-500 rounded-full" />
+          <li className="flex items-center gap-3 p-3 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
+            <span className="w-1.5 h-1.5 bg-stone-400 dark:bg-stone-500 rounded-full flex-shrink-0" />
             <span>{t.instructions.switchLanguage}</span>
           </li>
         </ul>
@@ -133,4 +171,3 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({ state }) => {
 };
 
 export default RecordingControls;
-

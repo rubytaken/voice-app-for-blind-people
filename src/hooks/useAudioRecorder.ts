@@ -1,16 +1,77 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { AudioRecording } from '../types';
 
 interface UseAudioRecorderReturn {
   startRecording: () => Promise<void>;
   stopRecording: () => void;
   playRecording: () => Promise<void>;
+  pausePlayback: () => void;
   isRecording: boolean;
   isPlaying: boolean;
   recording: AudioRecording | null;
   error: string | null;
   isSupported: boolean;
 }
+
+// Get the best supported MIME type for the current browser
+const getSupportedMimeType = (): string => {
+  if (typeof MediaRecorder === 'undefined') return '';
+
+  const types = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/ogg',
+    'audio/mp4',
+    'audio/mpeg',
+    'audio/wav',
+  ];
+
+  for (const type of types) {
+    if (MediaRecorder.isTypeSupported(type)) {
+      return type;
+    }
+  }
+
+  return '';
+};
+
+// Get audio duration using AudioContext for more reliable results
+const getAudioDurationWithContext = async (blob: Blob): Promise<number> => {
+  return new Promise((resolve) => {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const reader = new FileReader();
+
+    reader.onload = async () => {
+      try {
+        const arrayBuffer = reader.result as ArrayBuffer;
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        audioContext.close();
+        resolve(audioBuffer.duration);
+      } catch (error) {
+        console.warn('AudioContext decode failed, falling back to Audio element');
+        audioContext.close();
+        // Fallback to Audio element
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.onloadedmetadata = () => {
+          URL.revokeObjectURL(url);
+          resolve(audio.duration || 0);
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve(0);
+        };
+      }
+    };
+
+    reader.onerror = () => {
+      resolve(0);
+    };
+
+    reader.readAsArrayBuffer(blob);
+  });
+};
 
 export const useAudioRecorder = (): UseAudioRecorderReturn => {
   const [isRecording, setIsRecording] = useState<boolean>(false);
@@ -22,6 +83,9 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
   const audioChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const recordingStartTimeRef = useRef<number>(0);
+  const isRecordingRef = useRef<boolean>(false);
+  const recordingRef = useRef<AudioRecording | null>(null);
 
   const isSupported =
     typeof window !== 'undefined' &&
@@ -29,28 +93,69 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
     'getUserMedia' in navigator.mediaDevices &&
     typeof MediaRecorder !== 'undefined';
 
+  // Keep refs in sync
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
+
+  useEffect(() => {
+    recordingRef.current = recording;
+  }, [recording]);
+
+  // Cleanup function
+  const cleanup = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+      audioRef.current = null;
+    }
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => cleanup();
+  }, [cleanup]);
+
   const startRecording = useCallback(async () => {
     if (!isSupported) {
       setError('Audio recording is not supported in this browser');
       return;
     }
 
-    if (isRecording) return;
+    if (isRecordingRef.current) {
+      console.log('Already recording, ignoring start request');
+      return;
+    }
 
     try {
       setError(null);
       audioChunksRef.current = [];
 
-      // Request microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Request microphone access with specific constraints for better quality
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100,
+        },
+      });
       streamRef.current = stream;
 
+      // Get the best supported MIME type
+      const mimeType = getSupportedMimeType();
+      const options: MediaRecorderOptions = {};
+
+      if (mimeType) {
+        options.mimeType = mimeType;
+      }
+
       // Create MediaRecorder instance
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported('audio/webm')
-          ? 'audio/webm'
-          : 'audio/mp4',
-      });
+      const mediaRecorder = new MediaRecorder(stream, options);
 
       mediaRecorder.ondataavailable = (event: BlobEvent) => {
         if (event.data.size > 0) {
@@ -58,22 +163,44 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
         }
       };
 
-      mediaRecorder.onstop = () => {
+      mediaRecorder.onstop = async () => {
+        console.log('MediaRecorder stopped, processing audio...');
+        const recordingDuration = (Date.now() - recordingStartTimeRef.current) / 1000;
+
         const audioBlob = new Blob(audioChunksRef.current, {
-          type: mediaRecorder.mimeType,
+          type: mediaRecorder.mimeType || 'audio/webm',
         });
+
+        // Revoke old URL if exists
+        if (recordingRef.current?.url) {
+          URL.revokeObjectURL(recordingRef.current.url);
+        }
+
         const audioUrl = URL.createObjectURL(audioBlob);
 
-        // Calculate duration (will be updated when played)
+        // Try to get accurate duration
+        let duration = recordingDuration;
+        try {
+          const accurateDuration = await getAudioDurationWithContext(audioBlob);
+          if (accurateDuration > 0) {
+            duration = accurateDuration;
+          }
+        } catch (e) {
+          console.warn('Could not get accurate duration:', e);
+        }
+
         const newRecording: AudioRecording = {
           blob: audioBlob,
           url: audioUrl,
-          duration: 0,
+          duration,
           createdAt: new Date(),
         };
 
+        console.log('Recording complete:', { duration, blobSize: audioBlob.size });
         setRecording(newRecording);
+        recordingRef.current = newRecording;
         setIsRecording(false);
+        isRecordingRef.current = false;
 
         // Clean up stream
         if (streamRef.current) {
@@ -82,32 +209,68 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
         }
       };
 
-      mediaRecorder.onerror = (event: Event) => {
+      mediaRecorder.onerror = () => {
         setError('Recording error occurred');
         setIsRecording(false);
+        isRecordingRef.current = false;
+        cleanup();
       };
 
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
+      recordingStartTimeRef.current = Date.now();
+
+      // Start recording with timeslice for better data handling
+      mediaRecorder.start(1000);
       setIsRecording(true);
+      isRecordingRef.current = true;
+      console.log('Recording started');
     } catch (err: any) {
-      setError(err.message || 'Failed to start recording');
+      let errorMessage = 'Failed to start recording';
+
+      if (err.name === 'NotAllowedError') {
+        errorMessage = 'Microphone access denied. Please allow microphone access.';
+      } else if (err.name === 'NotFoundError') {
+        errorMessage = 'No microphone found. Please connect a microphone.';
+      } else if (err.name === 'NotReadableError') {
+        errorMessage = 'Microphone is being used by another application.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setError(errorMessage);
       setIsRecording(false);
+      isRecordingRef.current = false;
+      cleanup();
     }
-  }, [isRecording, isSupported]);
+  }, [isSupported, cleanup]);
 
   const stopRecording = useCallback(() => {
-    if (!isRecording || !mediaRecorderRef.current) return;
+    console.log('stopRecording called, isRecordingRef:', isRecordingRef.current, 'mediaRecorder:', mediaRecorderRef.current?.state);
+
+    if (!mediaRecorderRef.current) {
+      console.log('No mediaRecorder available');
+      return;
+    }
 
     try {
-      mediaRecorderRef.current.stop();
+      if (mediaRecorderRef.current.state === 'recording') {
+        console.log('Stopping MediaRecorder...');
+        mediaRecorderRef.current.stop();
+      } else {
+        console.log('MediaRecorder not in recording state:', mediaRecorderRef.current.state);
+      }
     } catch (err: any) {
+      console.error('Error stopping recording:', err);
       setError(err.message || 'Failed to stop recording');
     }
-  }, [isRecording]);
+  }, []);
 
   const playRecording = useCallback(async () => {
-    if (!recording || isPlaying) return;
+    const currentRecording = recordingRef.current;
+    if (!currentRecording) {
+      console.log('No recording to play');
+      return;
+    }
 
     try {
       setError(null);
@@ -118,44 +281,59 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
         audioRef.current = null;
       }
 
-      const audio = new Audio(recording.url);
+      console.log('Playing recording:', currentRecording.url);
+      const audio = new Audio(currentRecording.url);
       audioRef.current = audio;
 
+      // Handle browser autoplay policies
+      audio.volume = 1.0;
+
       audio.onended = () => {
+        console.log('Playback ended');
         setIsPlaying(false);
         audioRef.current = null;
       };
 
-      audio.onerror = () => {
+      audio.onerror = (e) => {
+        console.error('Audio playback error:', e);
         setError('Failed to play recording');
         setIsPlaying(false);
         audioRef.current = null;
       };
 
-      audio.onloadedmetadata = () => {
-        // Update recording duration
-        setRecording((prev) =>
-          prev
-            ? {
-                ...prev,
-                duration: audio.duration,
-              }
-            : null
-        );
-      };
-
       setIsPlaying(true);
-      await audio.play();
+
+      try {
+        await audio.play();
+        console.log('Playback started');
+      } catch (playError: any) {
+        // Handle autoplay restrictions
+        if (playError.name === 'NotAllowedError') {
+          setError('Click or tap to enable audio playback');
+        } else {
+          setError(playError.message || 'Failed to play recording');
+        }
+        setIsPlaying(false);
+        audioRef.current = null;
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to play recording');
       setIsPlaying(false);
     }
-  }, [recording, isPlaying]);
+  }, []);
+
+  const pausePlayback = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    }
+  }, []);
 
   return {
     startRecording,
     stopRecording,
     playRecording,
+    pausePlayback,
     isRecording,
     isPlaying,
     recording,
@@ -163,4 +341,3 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
     isSupported,
   };
 };
-
