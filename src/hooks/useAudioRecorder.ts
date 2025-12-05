@@ -11,6 +11,8 @@ interface UseAudioRecorderReturn {
   recording: AudioRecording | null;
   error: string | null;
   isSupported: boolean;
+  unlockAudio: () => Promise<void>;
+  isAudioUnlocked: boolean;
 }
 
 // Get the best supported MIME type for the current browser
@@ -78,6 +80,7 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [recording, setRecording] = useState<AudioRecording | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isAudioUnlocked, setIsAudioUnlocked] = useState<boolean>(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -86,6 +89,7 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
   const recordingStartTimeRef = useRef<number>(0);
   const isRecordingRef = useRef<boolean>(false);
   const recordingRef = useRef<AudioRecording | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   const isSupported =
     typeof window !== 'undefined' &&
@@ -117,8 +121,51 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
 
   // Cleanup on unmount
   useEffect(() => {
-    return () => cleanup();
+    return () => {
+      cleanup();
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+    };
   }, [cleanup]);
+
+  // Unlock audio playback - call this on first user interaction
+  const unlockAudio = useCallback(async () => {
+    if (isAudioUnlocked) return;
+
+    try {
+      // Create AudioContext if not exists
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+
+      // Resume AudioContext if suspended
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+
+      // Play a silent sound to unlock audio
+      const oscillator = audioContextRef.current.createOscillator();
+      const gainNode = audioContextRef.current.createGain();
+      gainNode.gain.value = 0; // Silent
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContextRef.current.destination);
+      oscillator.start(0);
+      oscillator.stop(0.001);
+
+      // Also try to play a silent HTML5 audio
+      const silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+      silentAudio.volume = 0;
+      await silentAudio.play().catch(() => { });
+
+      setIsAudioUnlocked(true);
+      setError(null);
+      console.log('Audio unlocked successfully');
+    } catch (err) {
+      console.error('Failed to unlock audio:', err);
+    }
+  }, [isAudioUnlocked]);
 
   const startRecording = useCallback(async () => {
     if (!isSupported) {
@@ -339,5 +386,7 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
     recording,
     error,
     isSupported,
+    unlockAudio,
+    isAudioUnlocked,
   };
 };

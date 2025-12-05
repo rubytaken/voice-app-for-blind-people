@@ -36,6 +36,8 @@ const VoiceRecorder: React.FC = () => {
         isPlaying,
         recording,
         error: recordingError,
+        unlockAudio,
+        isAudioUnlocked,
     } = useAudioRecorder();
 
     // Keep refs in sync with state
@@ -328,6 +330,45 @@ const VoiceRecorder: React.FC = () => {
             role="main"
             aria-label={t.accessibility.mainRegion}
         >
+            {/* Audio Unlock Overlay - Shows on first load to enable audio playback */}
+            {!isAudioUnlocked && (
+                <div
+                    className="fixed inset-0 z-50 bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+                    onClick={unlockAudio}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === 'Enter' && unlockAudio()}
+                    aria-label={language === 'en' ? 'Click to enable audio' : 'Sesi etkinleştirmek için tıklayın'}
+                >
+                    <div className="bg-white dark:bg-stone-800 rounded-2xl p-8 max-w-md text-center shadow-2xl animate-fade-in">
+                        <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg">
+                            <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                            </svg>
+                        </div>
+                        <h2 className="text-2xl font-bold text-stone-800 dark:text-stone-100 mb-3">
+                            {language === 'en' ? 'Enable Audio' : 'Sesi Etkinleştir'}
+                        </h2>
+                        <p className="text-stone-600 dark:text-stone-400 mb-6">
+                            {language === 'en'
+                                ? 'Tap anywhere to enable audio playback for voice commands'
+                                : 'Sesli komutlar için ses oynatmayı etkinleştirmek üzere herhangi bir yere dokunun'}
+                        </p>
+                        <button
+                            onClick={unlockAudio}
+                            className="w-full py-4 px-6 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5"
+                        >
+                            {language === 'en' ? '🔊 Enable Audio' : '🔊 Sesi Etkinleştir'}
+                        </button>
+                        <p className="mt-4 text-xs text-stone-500 dark:text-stone-500">
+                            {language === 'en'
+                                ? 'This is required for audio playback on mobile devices'
+                                : 'Bu, mobil cihazlarda ses oynatma için gereklidir'}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Subtle Background Decoration */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-0 left-1/4 w-96 h-96 bg-stone-200/30 dark:bg-stone-800/20 rounded-full filter blur-3xl animate-float" />
