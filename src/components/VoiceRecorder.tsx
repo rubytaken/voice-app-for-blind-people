@@ -27,6 +27,10 @@ const VoiceRecorder: React.FC = () => {
     const lastTranscriptRef = useRef('');
     const accumulatedTranscriptRef = useRef('');
     const recordingRef = useRef<typeof recording>(null);
+    
+    // Command debounce - prevent duplicate command execution
+    const lastCommandRef = useRef<{ action: string; timestamp: number } | null>(null);
+    const COMMAND_COOLDOWN_MS = 2000; // 2 second cooldown between same commands
 
     const {
         startRecording,
@@ -143,9 +147,28 @@ const VoiceRecorder: React.FC = () => {
                 }
             }
 
-            // Parse and handle voice commands - always process these
+            // Parse and handle voice commands - only process on final transcripts to prevent duplicates
+            // Skip command processing for interim results
+            if (!isFinal) {
+                return;
+            }
+            
             const command = parseVoiceCommand(transcript);
             if (command) {
+                // Check if this command was recently executed (debounce)
+                const now = Date.now();
+                const lastCommand = lastCommandRef.current;
+                
+                if (lastCommand && 
+                    lastCommand.action === command.action && 
+                    (now - lastCommand.timestamp) < COMMAND_COOLDOWN_MS) {
+                    console.log('Command debounced (too soon):', command.action);
+                    return;
+                }
+                
+                // Update last command tracking
+                lastCommandRef.current = { action: command.action, timestamp: now };
+                
                 console.log('Voice command detected:', command, 'isRecording:', currentIsRecording);
 
                 switch (command.action) {
@@ -326,106 +349,154 @@ const VoiceRecorder: React.FC = () => {
 
     return (
         <div
-            className="min-h-screen bg-gradient-to-br from-stone-50 via-stone-100 to-stone-50 dark:from-stone-950 dark:via-stone-900 dark:to-stone-950 flex flex-col items-center justify-start p-6 md:p-8 transition-all duration-500"
+            className="min-h-screen relative overflow-hidden transition-all duration-700"
+            style={{
+                background: 'linear-gradient(135deg, hsl(45 30% 96%) 0%, hsl(40 25% 92%) 50%, hsl(35 20% 90%) 100%)'
+            }}
             role="main"
             aria-label={t.accessibility.mainRegion}
         >
+            {/* Dark mode background */}
+            <div className="dark:block hidden absolute inset-0 transition-all duration-700" style={{
+                background: 'linear-gradient(135deg, hsl(25 25% 8%) 0%, hsl(25 20% 11%) 50%, hsl(25 18% 9%) 100%)'
+            }} />
+
+            {/* Decorative Background Elements */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none">
+                {/* Warm radial glow - top */}
+                <div 
+                    className="absolute -top-1/4 left-1/4 w-[800px] h-[800px] rounded-full animate-float opacity-40 dark:opacity-20"
+                    style={{
+                        background: 'radial-gradient(circle, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.05) 40%, transparent 70%)'
+                    }}
+                />
+                {/* Secondary glow - bottom right */}
+                <div 
+                    className="absolute -bottom-1/4 -right-1/4 w-[600px] h-[600px] rounded-full animate-float-slow animation-delay-2000 opacity-30 dark:opacity-15"
+                    style={{
+                        background: 'radial-gradient(circle, rgba(180, 83, 9, 0.12) 0%, rgba(139, 69, 19, 0.04) 50%, transparent 70%)'
+                    }}
+                />
+                {/* Subtle grain overlay */}
+                <div className="absolute inset-0 opacity-[0.02] dark:opacity-[0.04]" style={{
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`
+                }} />
+            </div>
+
             {/* Audio Unlock Overlay - Shows on first load to enable audio playback */}
             {!isAudioUnlocked && (
                 <div
-                    className="fixed inset-0 z-50 bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    style={{ background: 'rgba(26, 22, 18, 0.9)', backdropFilter: 'blur(8px)' }}
                     onClick={unlockAudio}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => e.key === 'Enter' && unlockAudio()}
                     aria-label={language === 'en' ? 'Click to enable audio' : 'Sesi etkinleştirmek için tıklayın'}
                 >
-                    <div className="bg-white dark:bg-stone-800 rounded-2xl p-8 max-w-md text-center shadow-2xl animate-fade-in">
-                        <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg">
-                            <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                            </svg>
+                    <div className="bg-cream-50 dark:bg-espresso-800 rounded-3xl p-10 max-w-md text-center shadow-warm-xl animate-scale-in border border-cream-300 dark:border-espresso-700">
+                        {/* Animated Sound Icon */}
+                        <div className="relative w-24 h-24 mx-auto mb-8">
+                            <div className="absolute inset-0 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full animate-glow" />
+                            <div className="absolute inset-2 bg-gradient-to-br from-amber-500 to-amber-700 rounded-full flex items-center justify-center shadow-amber-glow">
+                                <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                                </svg>
+                            </div>
                         </div>
-                        <h2 className="text-2xl font-bold text-stone-800 dark:text-stone-100 mb-3">
+                        <h2 className="font-serif text-3xl font-semibold text-espresso-800 dark:text-cream-100 mb-4">
                             {language === 'en' ? 'Enable Audio' : 'Sesi Etkinleştir'}
                         </h2>
-                        <p className="text-stone-600 dark:text-stone-400 mb-6">
+                        <p className="text-espresso-600 dark:text-cream-400 mb-8 leading-relaxed">
                             {language === 'en'
-                                ? 'Tap anywhere to enable audio playback for voice commands'
-                                : 'Sesli komutlar için ses oynatmayı etkinleştirmek üzere herhangi bir yere dokunun'}
+                                ? 'Tap anywhere to enable audio playback for voice commands and feedback'
+                                : 'Sesli komutlar ve geri bildirim için ses oynatmayı etkinleştirmek üzere herhangi bir yere dokunun'}
                         </p>
                         <button
                             onClick={unlockAudio}
-                            className="w-full py-4 px-6 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5"
+                            className="w-full py-4 px-8 btn-primary text-lg font-semibold rounded-2xl"
                         >
                             {language === 'en' ? '🔊 Enable Audio' : '🔊 Sesi Etkinleştir'}
                         </button>
-                        <p className="mt-4 text-xs text-stone-500 dark:text-stone-500">
+                        <p className="mt-6 text-sm text-espresso-400 dark:text-espresso-500">
                             {language === 'en'
-                                ? 'This is required for audio playback on mobile devices'
-                                : 'Bu, mobil cihazlarda ses oynatma için gereklidir'}
+                                ? 'Required for audio playback on mobile devices'
+                                : 'Mobil cihazlarda ses oynatma için gereklidir'}
                         </p>
                     </div>
                 </div>
             )}
 
-            {/* Subtle Background Decoration */}
-            <div className="fixed inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-0 left-1/4 w-96 h-96 bg-stone-200/30 dark:bg-stone-800/20 rounded-full filter blur-3xl animate-float" />
-                <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-stone-300/20 dark:bg-stone-700/15 rounded-full filter blur-3xl animate-float animation-delay-2000" />
-            </div>
-
             {/* Content Container */}
-            <div className="relative z-10 w-full max-w-5xl mx-auto">
+            <div className="relative z-10 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
                 {/* Header */}
-                <header className="w-full mb-8 animate-fade-in">
-                    <div className="flex items-center justify-between mb-6">
-                        <h1 className="text-3xl md:text-5xl font-bold text-stone-800 dark:text-stone-100 tracking-tight">
-                            {t.appTitle}
-                        </h1>
-                        <div className="flex items-center gap-2">
+                <header className="w-full mb-10 animate-fade-in">
+                    <div className="flex items-center justify-between mb-8">
+                        {/* Logo & Title */}
+                        <div className="flex items-center gap-4">
+                            <div className="relative">
+                                <div className="w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-amber-glow">
+                                    <svg className="w-6 h-6 md:w-7 md:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <h1 className="font-serif text-3xl md:text-4xl lg:text-5xl font-bold text-espresso-800 dark:text-cream-100 tracking-tight">
+                                {t.appTitle}
+                            </h1>
+                        </div>
+                        
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2 md:gap-3">
                             <button
                                 onClick={handleNewNote}
-                                className="p-3 bg-white dark:bg-stone-800 rounded-xl shadow-soft hover:shadow-soft-lg transition-all duration-200 hover:-translate-y-0.5 border border-stone-200 dark:border-stone-700"
+                                className="group p-3 md:p-3.5 bg-white dark:bg-espresso-800 rounded-xl shadow-warm hover:shadow-warm-lg transition-all duration-300 hover:-translate-y-1 border border-cream-200 dark:border-espresso-700"
                                 title={language === 'en' ? 'New Note' : 'Yeni Not'}
                                 aria-label={language === 'en' ? 'New Note' : 'Yeni Not'}
                             >
-                                <svg className="w-5 h-5 text-stone-600 dark:text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-5 h-5 text-espresso-600 dark:text-cream-400 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                                 </svg>
                             </button>
                             <button
                                 onClick={() => setShowSavedNotes(true)}
-                                className="p-3 bg-white dark:bg-stone-800 rounded-xl shadow-soft hover:shadow-soft-lg transition-all duration-200 hover:-translate-y-0.5 border border-stone-200 dark:border-stone-700"
+                                className="group p-3 md:p-3.5 bg-white dark:bg-espresso-800 rounded-xl shadow-warm hover:shadow-warm-lg transition-all duration-300 hover:-translate-y-1 border border-cream-200 dark:border-espresso-700"
                                 title={language === 'en' ? 'Saved Notes' : 'Kaydedilen Notlar'}
                                 aria-label={language === 'en' ? 'Saved Notes' : 'Kaydedilen Notlar'}
                             >
-                                <svg className="w-5 h-5 text-stone-600 dark:text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-5 h-5 text-espresso-600 dark:text-cream-400 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
                             </button>
                         </div>
                     </div>
 
-                    <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                            <span className="text-sm font-medium text-stone-600 dark:text-stone-400 bg-stone-100 dark:bg-stone-800 px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700">
+                    {/* Status Bar */}
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <div className="flex flex-wrap items-center gap-3">
+                            {/* Language Badge */}
+                            <span className="inline-flex items-center gap-2 text-sm font-medium text-espresso-700 dark:text-cream-300 bg-cream-100 dark:bg-espresso-800 px-4 py-2 rounded-xl border border-cream-200 dark:border-espresso-700 shadow-sm">
+                                <svg className="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                                </svg>
                                 {language === 'en' ? 'English' : 'Türkçe'}
                             </span>
+                            
+                            {/* Listening Status */}
                             {isListening ? (
-                                <span className="flex items-center gap-2 bg-white dark:bg-stone-800 px-4 py-2 rounded-xl shadow-soft border border-stone-200 dark:border-stone-700">
-                                    <span className="relative flex h-2 w-2">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                <span className="flex items-center gap-2.5 bg-white dark:bg-espresso-800 px-4 py-2 rounded-xl shadow-warm border border-cream-200 dark:border-espresso-700">
+                                    <span className="relative flex h-2.5 w-2.5">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
                                     </span>
-                                    <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
+                                    <span className="text-sm font-medium text-espresso-700 dark:text-cream-300">
                                         {language === 'en' ? 'Listening' : 'Dinliyor'}
                                     </span>
                                 </span>
                             ) : (
-                                <span className="flex items-center gap-2 bg-stone-100 dark:bg-stone-800 px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700">
-                                    <span className="w-2 h-2 bg-stone-400 rounded-full" />
-                                    <span className="text-sm text-stone-500 dark:text-stone-500">
+                                <span className="flex items-center gap-2.5 bg-cream-100 dark:bg-espresso-800 px-4 py-2 rounded-xl border border-cream-200 dark:border-espresso-700">
+                                    <span className="w-2.5 h-2.5 bg-cream-400 dark:bg-espresso-600 rounded-full" />
+                                    <span className="text-sm text-espresso-500 dark:text-espresso-400">
                                         {language === 'en' ? 'Starting...' : 'Başlatılıyor...'}
                                     </span>
                                 </span>
@@ -434,20 +505,24 @@ const VoiceRecorder: React.FC = () => {
 
                         {/* Recording Timer */}
                         {isRecording && (
-                            <div className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-950/30 rounded-xl border border-red-200 dark:border-red-800/50 animate-fade-in">
-                                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                                <span className="text-lg font-mono font-semibold text-red-600 dark:text-red-400">
+                            <div className="flex items-center gap-3 px-5 py-2.5 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 rounded-xl border border-amber-200 dark:border-amber-800/50 animate-fade-in shadow-warm">
+                                <span className="relative flex h-3 w-3">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-600"></span>
+                                </span>
+                                <span className="text-xl font-mono font-bold text-amber-700 dark:text-amber-400 tracking-wider">
                                     {formatTime(recordingDuration)}
                                 </span>
                             </div>
                         )}
 
+                        {/* Current Note Indicator */}
                         {currentNote && (
-                            <div className="flex items-center gap-2 bg-stone-100 dark:bg-stone-800 px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700">
-                                <svg className="w-4 h-4 text-stone-500 dark:text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="flex items-center gap-2.5 bg-cream-100 dark:bg-espresso-800 px-4 py-2 rounded-xl border border-cream-200 dark:border-espresso-700 animate-slide-in-right">
+                                <svg className="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
-                                <span className="text-sm font-medium text-stone-700 dark:text-stone-300 truncate max-w-xs">
+                                <span className="text-sm font-medium text-espresso-700 dark:text-cream-300 truncate max-w-[200px]">
                                     {currentNote.title}
                                 </span>
                             </div>
@@ -457,13 +532,13 @@ const VoiceRecorder: React.FC = () => {
 
                 {/* Success Message */}
                 {saveSuccess && (
-                    <div className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl flex items-center gap-3 animate-fade-in">
-                        <div className="w-8 h-8 flex items-center justify-center bg-emerald-100 dark:bg-emerald-900/50 rounded-full">
-                            <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    <div className="mb-8 p-5 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/20 border border-green-200 dark:border-green-800/50 rounded-2xl flex items-center gap-4 animate-fade-in shadow-warm">
+                        <div className="w-10 h-10 flex items-center justify-center bg-gradient-to-br from-green-400 to-green-600 rounded-xl shadow-lg">
+                            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                             </svg>
                         </div>
-                        <span className="text-emerald-800 dark:text-emerald-200 font-medium">
+                        <span className="text-green-800 dark:text-green-200 font-semibold text-lg">
                             {language === 'en' ? 'Note saved successfully!' : 'Not başarıyla kaydedildi!'}
                         </span>
                     </div>
@@ -480,28 +555,40 @@ const VoiceRecorder: React.FC = () => {
                 />
 
                 {/* Recording Controls */}
-                <div className="mt-8">
+                <div className="mt-10">
                     <RecordingControls state={recordingState} />
                 </div>
 
                 {/* Error Display */}
                 {(recordingError || voiceError) && (
                     <div
-                        className="mt-8 card-elevated p-6 border-l-4 border-red-400 dark:border-red-500"
+                        className="mt-10 card-elevated p-6 md:p-8 border-l-4 border-amber-500"
                         role="alert"
                     >
-                        <p className="text-lg font-semibold mb-3 flex items-center gap-2 text-stone-800 dark:text-stone-200">
+                        <p className="text-lg font-serif font-semibold mb-4 flex items-center gap-3 text-espresso-800 dark:text-cream-200">
                             <span className="text-2xl">⚠️</span>
                             <span>Hata / Error</span>
                         </p>
-                        <p className="text-stone-600 dark:text-stone-400 mb-4">{recordingError || voiceError}</p>
-                        <div className="text-left text-sm space-y-1.5">
-                            <p className="font-semibold text-stone-700 dark:text-stone-300">Çözüm / Solution:</p>
-                            <ul className="list-disc list-inside space-y-1 text-stone-500 dark:text-stone-500">
-                                <li>Chrome, Edge veya Safari kullanın / Use Chrome, Edge or Safari</li>
-                                <li>Mikrofon iznini verin / Grant microphone permission</li>
-                                <li>Sayfayı yenileyin / Refresh the page</li>
-                                <li>HTTPS kullanıyor olmalısınız / Must use HTTPS</li>
+                        <p className="text-espresso-600 dark:text-cream-400 mb-5">{recordingError || voiceError}</p>
+                        <div className="text-left text-sm space-y-2">
+                            <p className="font-semibold text-espresso-700 dark:text-cream-300">Çözüm / Solution:</p>
+                            <ul className="list-none space-y-2 text-espresso-500 dark:text-cream-500">
+                                <li className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                                    Chrome, Edge veya Safari kullanın / Use Chrome, Edge or Safari
+                                </li>
+                                <li className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                                    Mikrofon iznini verin / Grant microphone permission
+                                </li>
+                                <li className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                                    Sayfayı yenileyin / Refresh the page
+                                </li>
+                                <li className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                                    HTTPS kullanıyor olmalısınız / Must use HTTPS
+                                </li>
                             </ul>
                         </div>
                     </div>
@@ -510,42 +597,42 @@ const VoiceRecorder: React.FC = () => {
                 {/* Browser Warning for Firefox */}
                 {typeof window !== 'undefined' && navigator.userAgent.includes('Firefox') && (
                     <div
-                        className="mt-8 card-elevated p-6 border-l-4 border-amber-400 dark:border-amber-500"
+                        className="mt-10 card-elevated p-6 md:p-8 border-l-4 border-amber-400"
                         role="alert"
                     >
-                        <p className="text-lg font-semibold mb-3 flex items-center gap-2 text-stone-800 dark:text-stone-200">
+                        <p className="text-lg font-serif font-semibold mb-4 flex items-center gap-3 text-espresso-800 dark:text-cream-200">
                             <span className="text-2xl">⚠️</span>
                             <span>Tarayıcı Uyarısı / Browser Warning</span>
                         </p>
-                        <p className="text-stone-600 dark:text-stone-400 mb-2">
+                        <p className="text-espresso-600 dark:text-cream-400 mb-2">
                             Firefox Web Speech API'yi desteklemiyor.
                         </p>
-                        <p className="text-stone-600 dark:text-stone-400">
+                        <p className="text-espresso-600 dark:text-cream-400">
                             Firefox does not support Web Speech API.
                         </p>
-                        <p className="text-sm mt-3 font-medium text-amber-700 dark:text-amber-400">
+                        <p className="text-sm mt-4 font-medium text-amber-700 dark:text-amber-400">
                             Lütfen Chrome, Edge veya Safari kullanın / Please use Chrome, Edge or Safari
                         </p>
                     </div>
                 )}
 
                 {/* Footer Instructions */}
-                <footer className="mt-12 pt-6 text-center border-t border-stone-200 dark:border-stone-800">
-                    <div className="flex flex-wrap justify-center gap-4 text-sm text-stone-500 dark:text-stone-500">
+                <footer className="mt-16 pt-8 text-center border-t border-cream-200 dark:border-espresso-800">
+                    <div className="flex flex-wrap justify-center gap-4 md:gap-6 text-sm text-espresso-500 dark:text-cream-500">
                         <span className="flex items-center gap-2">
-                            <kbd className="px-2 py-1 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 rounded font-mono text-xs border border-stone-200 dark:border-stone-700">
+                            <kbd className="px-2.5 py-1.5 bg-white dark:bg-espresso-800 text-espresso-700 dark:text-cream-300 rounded-lg font-mono text-xs border border-cream-200 dark:border-espresso-700 shadow-sm">
                                 Alt+L
                             </kbd>
                             <span>{language === 'en' ? 'Switch language' : 'Dil değiştir'}</span>
                         </span>
                         <span className="flex items-center gap-2">
-                            <kbd className="px-2 py-1 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 rounded font-mono text-xs border border-stone-200 dark:border-stone-700">
+                            <kbd className="px-2.5 py-1.5 bg-white dark:bg-espresso-800 text-espresso-700 dark:text-cream-300 rounded-lg font-mono text-xs border border-cream-200 dark:border-espresso-700 shadow-sm">
                                 Space
                             </kbd>
                             <span>{language === 'en' ? 'Record/Stop' : 'Kaydet/Durdur'}</span>
                         </span>
                         <span className="flex items-center gap-2">
-                            <kbd className="px-2 py-1 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 rounded font-mono text-xs border border-stone-200 dark:border-stone-700">
+                            <kbd className="px-2.5 py-1.5 bg-white dark:bg-espresso-800 text-espresso-700 dark:text-cream-300 rounded-lg font-mono text-xs border border-cream-200 dark:border-espresso-700 shadow-sm">
                                 P
                             </kbd>
                             <span>{language === 'en' ? 'Play' : 'Oynat'}</span>

@@ -1,4 +1,6 @@
-/* Modern, accessible design */
+/* ═══════════════════════════════════════════════════════════
+   WARM STUDIO - APP SPECIFIC STYLES
+   ═══════════════════════════════════════════════════════════ */
 
 * {
   margin: 0;
@@ -14,13 +16,13 @@ html, body, #root {
 
 /* Keyboard focus indicators - enhanced for accessibility */
 *:focus-visible {
-  outline: 3px solid rgb(147 51 234);
+  outline: 3px solid hsl(35 85% 55%);
   outline-offset: 3px;
-  border-radius: 4px;
+  border-radius: 8px;
 }
 
 .dark *:focus-visible {
-  outline-color: rgb(192 132 252);
+  outline-color: hsl(38 90% 58%);
 }
 
 /* Smooth animations for accessibility */

@@ -6,6 +6,65 @@
 let voicesLoaded = false;
 let cachedVoices: SpeechSynthesisVoice[] = [];
 
+// Speech synthesis unlock state
+let speechSynthesisUnlocked = false;
+let pendingUtterances: Array<{ text: string; lang: string }> = [];
+
+/**
+ * Check if speech synthesis is unlocked
+ */
+export const isSpeechSynthesisUnlocked = (): boolean => {
+  return speechSynthesisUnlocked;
+};
+
+/**
+ * Unlock speech synthesis - must be called from a user interaction event
+ * This is required by modern browsers to allow speech synthesis
+ */
+export const unlockSpeechSynthesis = async (): Promise<boolean> => {
+  if (speechSynthesisUnlocked) {
+    return true;
+  }
+
+  if (!('speechSynthesis' in window)) {
+    console.warn('Speech synthesis not supported');
+    return false;
+  }
+
+  try {
+    // Cancel any pending speech
+    window.speechSynthesis.cancel();
+
+    // Create a silent utterance to unlock speech synthesis
+    const utterance = new SpeechSynthesisUtterance('');
+    utterance.volume = 0;
+    utterance.rate = 10; // Fast to complete quickly
+    
+    // Speak the silent utterance
+    window.speechSynthesis.speak(utterance);
+    
+    // Give it a moment to process
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    speechSynthesisUnlocked = true;
+    console.log('Speech synthesis unlocked successfully');
+    
+    // Process any pending utterances
+    if (pendingUtterances.length > 0) {
+      const pending = [...pendingUtterances];
+      pendingUtterances = [];
+      for (const { text, lang } of pending) {
+        await speak(text, lang);
+      }
+    }
+    
+    return true;
+  } catch (error) {
+    console.warn('Failed to unlock speech synthesis:', error);
+    return false;
+  }
+};
+
 /**
  * Load voices and cache them
  */
@@ -81,6 +140,13 @@ const getBestVoice = async (lang: string): Promise<SpeechSynthesisVoice | null> 
 export const speak = async (text: string, lang: string = 'en-US'): Promise<void> => {
   if (!('speechSynthesis' in window)) {
     console.warn('Speech synthesis not supported');
+    return;
+  }
+
+  // If speech synthesis is not unlocked, queue the utterance for later
+  if (!speechSynthesisUnlocked) {
+    console.log('Speech synthesis not unlocked yet, queueing:', text);
+    pendingUtterances.push({ text, lang });
     return;
   }
 

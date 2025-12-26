@@ -26,13 +26,14 @@ interface UseVoiceRecognitionReturn {
 }
 
 // Error categories for better handling
-type SpeechErrorType = 'network' | 'permission' | 'not-supported' | 'aborted' | 'unknown';
+type SpeechErrorType = 'network' | 'permission' | 'not-supported' | 'aborted' | 'no-speech' | 'unknown';
 
 const categorizeError = (error: string): SpeechErrorType => {
   if (error.includes('network')) return 'network';
   if (error.includes('not-allowed') || error.includes('permission')) return 'permission';
   if (error.includes('not-supported') || error.includes('service-not-allowed')) return 'not-supported';
   if (error.includes('aborted')) return 'aborted';
+  if (error.includes('no-speech')) return 'no-speech';
   return 'unknown';
 };
 
@@ -133,6 +134,16 @@ export const useVoiceRecognition = ({
           break;
         case 'aborted':
           // User or browser aborted - don't show error, but try to restart if continuous
+          if (!isManuallyStoppedRef.current && continuous) {
+            shouldRetry = true;
+          }
+          errorMessage = '';
+          break;
+        case 'no-speech':
+          // No speech detected - this is normal, silently restart if continuous
+          // Don't log or show error - user just hasn't spoken yet
+          // Reset retry count since this is expected behavior
+          retryCountRef.current = 0;
           if (!isManuallyStoppedRef.current && continuous) {
             shouldRetry = true;
           }

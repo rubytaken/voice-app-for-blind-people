@@ -132,29 +132,55 @@ const SavedNotes: React.FC<SavedNotesProps> = ({ onNoteSelect, onClose }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-3xl max-h-[85vh] bg-white dark:bg-stone-900 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-scale-in border border-stone-200 dark:border-stone-800">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
+      style={{ background: 'rgba(26, 22, 18, 0.8)', backdropFilter: 'blur(8px)' }}
+    >
+      <div 
+        className="w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden animate-scale-in rounded-3xl"
+        style={{
+          background: 'linear-gradient(135deg, rgba(255,252,247,0.98) 0%, rgba(255,248,235,0.95) 100%)',
+          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3), 0 10px 30px -10px rgba(0, 0, 0, 0.2)',
+          border: '1px solid rgba(210, 180, 140, 0.3)',
+        }}
+      >
+        {/* Dark mode background */}
+        <div 
+          className="dark:block hidden absolute inset-0 rounded-3xl"
+          style={{
+            background: 'linear-gradient(135deg, rgba(45,37,32,0.99) 0%, rgba(38,30,25,0.98) 100%)',
+            border: '1px solid rgba(100, 80, 60, 0.3)',
+          }}
+        />
+
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-stone-100 dark:border-stone-800">
-          <h2 className="text-xl font-semibold text-stone-800 dark:text-stone-200">
-            {language === 'en' ? 'Saved Notes' : 'Kaydedilen Notlar'}
-          </h2>
+        <div className="relative flex items-center justify-between p-6 border-b border-cream-200 dark:border-espresso-700">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <h2 className="font-serif text-2xl font-semibold text-espresso-800 dark:text-cream-100">
+              {language === 'en' ? 'Saved Notes' : 'Kaydedilen Notlar'}
+            </h2>
+          </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+            className="p-2.5 rounded-xl hover:bg-cream-100 dark:hover:bg-espresso-800 transition-all duration-200 group"
             aria-label="Close"
           >
-            <svg className="w-5 h-5 text-stone-500 dark:text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-espresso-500 dark:text-cream-400 group-hover:text-espresso-700 dark:group-hover:text-cream-200 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         {/* Search Bar */}
-        <div className="p-4 border-b border-stone-100 dark:border-stone-800">
+        <div className="relative p-4 border-b border-cream-100 dark:border-espresso-800">
           <div className="relative">
             <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400"
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-espresso-400 dark:text-cream-500"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -166,75 +192,85 @@ const SavedNotes: React.FC<SavedNotesProps> = ({ onNoteSelect, onClose }) => {
               placeholder={language === 'en' ? 'Search notes...' : 'Notlarda ara...'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg text-stone-800 dark:text-stone-200 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:ring-2 focus:ring-stone-300 dark:focus:ring-stone-600 focus:border-transparent transition-all"
+              className="w-full pl-11 pr-4 py-3 bg-cream-50 dark:bg-espresso-900 border border-cream-200 dark:border-espresso-700 rounded-xl text-espresso-800 dark:text-cream-200 placeholder:text-espresso-400 dark:placeholder:text-cream-600 focus:ring-2 focus:ring-amber-400/50 dark:focus:ring-amber-500/50 focus:border-amber-400 dark:focus:border-amber-500 transition-all"
             />
           </div>
         </div>
 
         {/* Notes List */}
-        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+        <div className="relative flex-1 overflow-y-auto p-4 custom-scrollbar">
           {loading ? (
             <div className="flex items-center justify-center h-full">
-              <div className="w-8 h-8 border-2 border-stone-300 dark:border-stone-600 border-t-stone-600 dark:border-t-stone-300 rounded-full animate-spin" />
+              <div className="relative">
+                <div className="w-12 h-12 border-3 border-cream-200 dark:border-espresso-700 rounded-full" />
+                <div className="absolute inset-0 w-12 h-12 border-3 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              </div>
             </div>
           ) : filteredNotes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center py-12">
-              <div className="w-16 h-16 rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center mb-4">
-                <svg className="w-8 h-8 text-stone-400 dark:text-stone-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex flex-col items-center justify-center h-full text-center py-16">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-cream-100 to-cream-200 dark:from-espresso-800 dark:to-espresso-700 flex items-center justify-center mb-6 shadow-inner-warm">
+                <svg className="w-10 h-10 text-espresso-400 dark:text-cream-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
-              <p className="text-lg text-stone-500 dark:text-stone-400 font-medium">
+              <p className="font-serif text-xl text-espresso-600 dark:text-cream-400 font-medium mb-2">
                 {searchQuery
                   ? language === 'en' ? 'No notes found' : 'Not bulunamadı'
                   : language === 'en' ? 'No saved notes yet' : 'Henüz kaydedilmiş not yok'}
               </p>
-              <p className="text-sm text-stone-400 dark:text-stone-500 mt-1">
+              <p className="text-sm text-espresso-400 dark:text-cream-600">
                 {language === 'en' ? 'Start recording to create your first note' : 'İlk notunuzu oluşturmak için kayıt yapın'}
               </p>
             </div>
           ) : (
-            <div className="grid gap-2">
-              {filteredNotes.map((note) => (
+            <div className="grid gap-3">
+              {filteredNotes.map((note, index) => (
                 <div
                   key={note.id}
                   onClick={() => handleNoteClick(note.id)}
-                  className="group p-4 bg-stone-50 dark:bg-stone-800/50 rounded-xl border border-stone-100 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-600 transition-all cursor-pointer hover:shadow-soft"
+                  className="group p-5 rounded-2xl border border-cream-200 dark:border-espresso-700 hover:border-amber-300 dark:hover:border-amber-700 transition-all duration-300 cursor-pointer animate-fade-in-up"
+                  style={{
+                    background: 'rgba(255,255,255,0.7)',
+                    animationDelay: `${index * 50}ms`,
+                    animationFillMode: 'both',
+                  }}
                 >
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="dark:block hidden absolute inset-0 rounded-2xl" style={{ background: 'rgba(45,37,32,0.7)' }} />
+                  
+                  <div className="relative flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-base font-semibold text-stone-800 dark:text-stone-200 truncate mb-1">
+                      <h3 className="font-serif text-lg font-semibold text-espresso-800 dark:text-cream-100 truncate mb-2 group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors">
                         {note.title}
                       </h3>
-                      <p className="text-sm text-stone-500 dark:text-stone-400 line-clamp-2 mb-2">
+                      <p className="text-sm text-espresso-500 dark:text-cream-500 line-clamp-2 mb-3 leading-relaxed">
                         {note.transcript || (language === 'en' ? 'No transcript' : 'Metin yok')}
                       </p>
                       <div className="flex flex-col gap-2">
-                        <div className="flex items-center gap-3 text-xs text-stone-400 dark:text-stone-500">
-                          <span className="flex items-center gap-1">
+                        <div className="flex items-center gap-3 text-xs text-espresso-400 dark:text-cream-600">
+                          <span className="flex items-center gap-1.5">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             {formatDate(note.createdAt)}
                           </span>
                           {note.duration > 0 && (
-                            <span className="flex items-center gap-1">
+                            <span className="flex items-center gap-1.5">
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.536a5 5 0 001.414 1.414m2.828-9.9a9 9 0 012.828-2.828" />
                               </svg>
                               {formatDuration(note.duration)}
                             </span>
                           )}
-                          <span className="px-1.5 py-0.5 bg-stone-200 dark:bg-stone-700 rounded text-xs font-medium">
+                          <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-md text-xs font-medium">
                             {note.language === 'en' ? 'EN' : 'TR'}
                           </span>
                         </div>
                         {note.topics && note.topics.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex flex-wrap gap-1.5">
                             {note.topics.map((topic, idx) => (
                               <span
                                 key={idx}
-                                className="px-2 py-0.5 bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-300 rounded text-xs"
+                                className="px-2.5 py-1 bg-cream-100 dark:bg-espresso-800 text-espresso-600 dark:text-cream-400 rounded-lg text-xs font-medium"
                               >
                                 {topic}
                               </span>
@@ -243,15 +279,16 @@ const SavedNotes: React.FC<SavedNotesProps> = ({ onNoteSelect, onClose }) => {
                         )}
                       </div>
                     </div>
-                    <div className="flex flex-shrink-0 gap-1">
+                    <div className="flex flex-shrink-0 gap-1.5">
                       {/* Play Button */}
                       {note.audioUrl && (
                         <button
                           onClick={(e) => handlePlay(note, e)}
-                          className={`p-2 transition-all rounded-lg ${playingNoteId === note.id
-                              ? 'text-emerald-500 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30'
-                              : 'text-stone-400 hover:text-emerald-500 dark:hover:text-emerald-400 opacity-0 group-hover:opacity-100 hover:bg-stone-100 dark:hover:bg-stone-700'
-                            }`}
+                          className={`p-2.5 transition-all duration-200 rounded-xl ${
+                            playingNoteId === note.id
+                              ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 shadow-sm'
+                              : 'text-espresso-400 hover:text-amber-600 dark:hover:text-amber-400 opacity-0 group-hover:opacity-100 hover:bg-cream-100 dark:hover:bg-espresso-700'
+                          }`}
                           aria-label={playingNoteId === note.id
                             ? (language === 'en' ? 'Stop' : 'Durdur')
                             : (language === 'en' ? 'Play' : 'Oynat')
@@ -262,9 +299,9 @@ const SavedNotes: React.FC<SavedNotesProps> = ({ onNoteSelect, onClose }) => {
                           }
                         >
                           {playingNoteId === note.id ? (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <rect x="6" y="4" width="4" height="16" rx="1" strokeWidth={2} />
-                              <rect x="14" y="4" width="4" height="16" rx="1" strokeWidth={2} />
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                              <rect x="6" y="4" width="4" height="16" rx="1" />
+                              <rect x="14" y="4" width="4" height="16" rx="1" />
                             </svg>
                           ) : (
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -277,7 +314,7 @@ const SavedNotes: React.FC<SavedNotesProps> = ({ onNoteSelect, onClose }) => {
                       {/* Delete Button */}
                       <button
                         onClick={(e) => handleDelete(note.id, e)}
-                        className="p-2 text-stone-400 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all rounded-lg hover:bg-stone-100 dark:hover:bg-stone-700"
+                        className="p-2.5 text-espresso-400 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all duration-200 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20"
                         aria-label={language === 'en' ? 'Delete note' : 'Notu sil'}
                         title={language === 'en' ? 'Delete note' : 'Notu sil'}
                       >
@@ -294,12 +331,15 @@ const SavedNotes: React.FC<SavedNotesProps> = ({ onNoteSelect, onClose }) => {
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800/50">
-          <div className="flex items-center justify-between text-sm text-stone-500 dark:text-stone-400">
-            <span>
+        <div className="relative p-4 border-t border-cream-200 dark:border-espresso-700 bg-cream-50/50 dark:bg-espresso-900/50">
+          <div className="flex items-center justify-between text-sm text-espresso-500 dark:text-cream-500">
+            <span className="font-medium">
               {filteredNotes.length} {language === 'en' ? 'notes' : 'not'}
             </span>
-            <span className="text-xs">
+            <span className="text-xs flex items-center gap-2">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+              </svg>
               {language === 'en' ? 'Click to open' : 'Açmak için tıklayın'}
             </span>
           </div>

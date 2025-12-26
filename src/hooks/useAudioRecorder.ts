@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { AudioRecording } from '../types';
+import { unlockSpeechSynthesis } from '../services/audioService';
 
 interface UseAudioRecorderReturn {
   startRecording: () => Promise<void>;
@@ -158,6 +159,9 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
       const silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
       silentAudio.volume = 0;
       await silentAudio.play().catch(() => { });
+
+      // Also unlock speech synthesis
+      await unlockSpeechSynthesis();
 
       setIsAudioUnlocked(true);
       setError(null);
