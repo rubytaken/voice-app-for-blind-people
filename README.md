@@ -4,6 +4,7 @@ An accessible voice-controlled audio recording web application designed for **bl
 
 > **Graduation Project** for **SWE491** course at **Near East University**  
 > Developed by **Emre Tosman**
+> **Student No: 20210999**
 
 ## 🌐 Live Demo
 
@@ -200,7 +201,8 @@ This project is open source and available for educational purposes.
 
 ## 👨‍💻 Author
 
-**Emre Tosman**  
+**Emre Tosman**
+Student No: 20210999  
 Near East University  
 SWE491 - Graduation Project
 

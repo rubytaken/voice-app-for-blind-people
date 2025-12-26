@@ -189,22 +189,38 @@ export async function getSavedNotes(): Promise<SavedNote[]> {
     const notesJson = localStorage.getItem(STORAGE_KEY);
     const audioData = localStorage.getItem(AUDIO_STORAGE_KEY);
 
-    if (!notesJson) return [];
+    if (!notesJson) {
+      console.log('No saved notes found in localStorage');
+      return [];
+    }
 
     const notes: SerializedNote[] = JSON.parse(notesJson);
     const audioMap: { [key: string]: string } = audioData ? JSON.parse(audioData) : {};
 
+    console.log(`Loading ${notes.length} notes, ${Object.keys(audioMap).length} audio entries`);
+
     // Restore dates and audio blobs with proper URL caching
     return notes.map(note => {
       const audioBase64 = audioMap[note.id];
-      const audioBlob = audioBase64 ? base64ToBlob(audioBase64) : null;
+      let audioBlob: Blob | null = null;
+      let audioUrl: string | undefined;
+
+      if (audioBase64) {
+        audioBlob = base64ToBlob(audioBase64);
+        if (audioBlob) {
+          audioUrl = getCachedUrl(note.id, audioBlob);
+          console.log(`Audio restored for note ${note.id}: blob size ${audioBlob.size}`);
+        } else {
+          console.warn(`Failed to restore audio blob for note ${note.id}`);
+        }
+      }
 
       return {
         ...note,
         createdAt: new Date(note.createdAt),
         updatedAt: new Date(note.updatedAt),
         audioBlob: audioBlob || undefined,
-        audioUrl: audioBlob ? getCachedUrl(note.id, audioBlob) : undefined,
+        audioUrl,
       };
     });
   } catch (error) {
@@ -270,13 +286,32 @@ export async function saveNote(
 
     if (recording?.blob) {
       try {
-        const base64Audio = await blobToBase64(recording.blob);
-        audioMap[noteId] = base64Audio;
-        audioBlob = recording.blob;
-        audioUrl = getCachedUrl(noteId, recording.blob);
+        console.log('Saving audio blob:', {
+          size: recording.blob.size,
+          type: recording.blob.type,
+        });
+        
+        // Check if blob is valid
+        if (recording.blob.size === 0) {
+          console.warn('Audio blob is empty, skipping audio save');
+        } else {
+          const base64Audio = await blobToBase64(recording.blob);
+          
+          // Verify base64 conversion was successful
+          if (base64Audio && base64Audio.length > 100) {
+            audioMap[noteId] = base64Audio;
+            audioBlob = recording.blob;
+            audioUrl = getCachedUrl(noteId, recording.blob);
+            console.log('Audio saved successfully, base64 length:', base64Audio.length);
+          } else {
+            console.warn('Base64 conversion resulted in invalid data');
+          }
+        }
       } catch (audioError) {
         console.warn('Could not save audio, saving note without audio:', audioError);
       }
+    } else {
+      console.log('No audio blob to save');
     }
 
     existingNotes.push(serializedNote);

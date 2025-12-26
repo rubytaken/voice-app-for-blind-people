@@ -91,23 +91,36 @@ const VoiceRecorder: React.FC = () => {
     // Handle saving note
     const handleSaveNote = useCallback(async (title?: string) => {
         const transcript = lastTranscriptRef.current;
-        if (!transcript) return;
+        if (!transcript) {
+            const langCode = language === 'en' ? 'en-US' : 'tr-TR';
+            speak(language === 'en' ? 'No transcript to save' : 'Kaydedilecek metin yok', langCode);
+            return;
+        }
 
         try {
+            // Use ref to get the most up-to-date recording
+            const currentRecording = recordingRef.current;
+            
             // Pass undefined title to let storageService auto-generate from transcript
-            const savedNote = await saveNote(transcript, recording, language, title);
+            const savedNote = await saveNote(transcript, currentRecording, language, title);
             setSaveSuccess(true);
             setCurrentNote(savedNote);
 
             setTimeout(() => setSaveSuccess(false), 3000);
 
             const langCode = language === 'en' ? 'en-US' : 'tr-TR';
-            speak(language === 'en' ? 'Note saved successfully' : 'Not başarıyla kaydedildi', langCode);
-        } catch (error) {
+            const hasAudio = currentRecording?.blob ? true : false;
+            const message = hasAudio
+                ? (language === 'en' ? 'Note saved with audio' : 'Not sesli olarak kaydedildi')
+                : (language === 'en' ? 'Note saved' : 'Not kaydedildi');
+            speak(message, langCode);
+        } catch (error: any) {
             console.error('Error saving note:', error);
-            alert(language === 'en' ? 'Failed to save note' : 'Not kaydedilemedi');
+            const langCode = language === 'en' ? 'en-US' : 'tr-TR';
+            speak(language === 'en' ? 'Failed to save note' : 'Not kaydedilemedi', langCode);
+            alert(error.message || (language === 'en' ? 'Failed to save note' : 'Not kaydedilemedi'));
         }
-    }, [recording, language]);
+    }, [language]);
 
     // Handle loading a saved note
     const handleNoteSelect = useCallback((note: SavedNoteType) => {
@@ -516,15 +529,32 @@ const VoiceRecorder: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Current Note Indicator */}
+                        {/* Current Note Indicator with Play Button */}
                         {currentNote && (
-                            <div className="flex items-center gap-2.5 bg-cream-100 dark:bg-espresso-800 px-4 py-2 rounded-xl border border-cream-200 dark:border-espresso-700 animate-slide-in-right">
-                                <svg className="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="flex items-center gap-2 bg-cream-100 dark:bg-espresso-800 pl-4 pr-2 py-2 rounded-xl border border-cream-200 dark:border-espresso-700 animate-slide-in-right">
+                                <svg className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
-                                <span className="text-sm font-medium text-espresso-700 dark:text-cream-300 truncate max-w-[200px]">
+                                <span className="text-sm font-medium text-espresso-700 dark:text-cream-300 truncate max-w-[150px]">
                                     {currentNote.title}
                                 </span>
+                                {currentNote.audioUrl && (
+                                    <button
+                                        onClick={() => {
+                                            const audio = new Audio(currentNote.audioUrl);
+                                            audio.play().catch(err => console.error('Error playing note audio:', err));
+                                            const langCode = language === 'en' ? 'en-US' : 'tr-TR';
+                                            speak(language === 'en' ? 'Playing note' : 'Not oynatılıyor', langCode);
+                                        }}
+                                        className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+                                        title={language === 'en' ? 'Play note audio' : 'Notu oynat'}
+                                        aria-label={language === 'en' ? 'Play note audio' : 'Notu oynat'}
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M8 5v14l11-7z" />
+                                        </svg>
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>

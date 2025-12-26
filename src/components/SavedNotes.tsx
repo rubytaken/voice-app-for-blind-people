@@ -228,14 +228,33 @@ const SavedNotes: React.FC<SavedNotesProps> = ({ onNoteSelect, onClose }) => {
                 <div
                   key={note.id}
                   onClick={() => handleNoteClick(note.id)}
-                  className="group p-5 rounded-2xl border border-cream-200 dark:border-espresso-700 hover:border-amber-300 dark:hover:border-amber-700 transition-all duration-300 cursor-pointer animate-fade-in-up"
+                  className={`group p-5 rounded-2xl border transition-all duration-300 cursor-pointer animate-fade-in-up relative ${
+                    playingNoteId === note.id 
+                      ? 'border-green-400 dark:border-green-600 ring-2 ring-green-400/30 dark:ring-green-500/20' 
+                      : 'border-cream-200 dark:border-espresso-700 hover:border-amber-300 dark:hover:border-amber-700'
+                  }`}
                   style={{
-                    background: 'rgba(255,255,255,0.7)',
+                    background: playingNoteId === note.id 
+                      ? 'rgba(220, 252, 231, 0.5)' 
+                      : 'rgba(255,255,255,0.7)',
                     animationDelay: `${index * 50}ms`,
                     animationFillMode: 'both',
                   }}
                 >
-                  <div className="dark:block hidden absolute inset-0 rounded-2xl" style={{ background: 'rgba(45,37,32,0.7)' }} />
+                  <div className={`dark:block hidden absolute inset-0 rounded-2xl ${
+                    playingNoteId === note.id ? 'bg-green-950/30' : ''
+                  }`} style={{ background: playingNoteId === note.id ? 'rgba(20, 83, 45, 0.3)' : 'rgba(45,37,32,0.7)' }} />
+                  
+                  {/* Playing indicator */}
+                  {playingNoteId === note.id && (
+                    <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 bg-green-500 text-white text-xs font-medium rounded-full animate-pulse">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                      </span>
+                      {language === 'en' ? 'Playing...' : 'Oynatılıyor...'}
+                    </div>
+                  )}
                   
                   <div className="relative flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
@@ -254,11 +273,14 @@ const SavedNotes: React.FC<SavedNotesProps> = ({ onNoteSelect, onClose }) => {
                             {formatDate(note.createdAt)}
                           </span>
                           {note.duration > 0 && (
-                            <span className="flex items-center gap-1.5">
+                            <span className={`flex items-center gap-1.5 ${note.audioUrl ? 'text-green-600 dark:text-green-400' : ''}`}>
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.536a5 5 0 001.414 1.414m2.828-9.9a9 9 0 012.828-2.828" />
                               </svg>
                               {formatDuration(note.duration)}
+                              {note.audioUrl && (
+                                <span className="text-green-500 dark:text-green-400">●</span>
+                              )}
                             </span>
                           )}
                           <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-md text-xs font-medium">
@@ -279,19 +301,19 @@ const SavedNotes: React.FC<SavedNotesProps> = ({ onNoteSelect, onClose }) => {
                         )}
                       </div>
                     </div>
-                    <div className="flex flex-shrink-0 gap-1.5">
-                      {/* Play Button */}
-                      {note.audioUrl && (
+                    <div className="flex flex-shrink-0 gap-2">
+                      {/* Play Button - Always visible for notes with audio */}
+                      {note.audioUrl ? (
                         <button
                           onClick={(e) => handlePlay(note, e)}
-                          className={`p-2.5 transition-all duration-200 rounded-xl ${
+                          className={`p-3 transition-all duration-200 rounded-xl flex items-center justify-center ${
                             playingNoteId === note.id
-                              ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 shadow-sm'
-                              : 'text-espresso-400 hover:text-amber-600 dark:hover:text-amber-400 opacity-0 group-hover:opacity-100 hover:bg-cream-100 dark:hover:bg-espresso-700'
+                              ? 'bg-gradient-to-br from-green-400 to-green-600 text-white shadow-lg scale-110'
+                              : 'bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-md hover:shadow-lg hover:scale-105'
                           }`}
                           aria-label={playingNoteId === note.id
-                            ? (language === 'en' ? 'Stop' : 'Durdur')
-                            : (language === 'en' ? 'Play' : 'Oynat')
+                            ? (language === 'en' ? 'Stop playing' : 'Oynatmayı durdur')
+                            : (language === 'en' ? 'Play audio' : 'Sesi oynat')
                           }
                           title={playingNoteId === note.id
                             ? (language === 'en' ? 'Stop' : 'Durdur')
@@ -299,26 +321,35 @@ const SavedNotes: React.FC<SavedNotesProps> = ({ onNoteSelect, onClose }) => {
                           }
                         >
                           {playingNoteId === note.id ? (
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                               <rect x="6" y="4" width="4" height="16" rx="1" />
                               <rect x="14" y="4" width="4" height="16" rx="1" />
                             </svg>
                           ) : (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z" />
                             </svg>
                           )}
                         </button>
+                      ) : (
+                        <div 
+                          className="p-3 rounded-xl bg-cream-100 dark:bg-espresso-800 text-espresso-400 dark:text-cream-600"
+                          title={language === 'en' ? 'No audio' : 'Ses yok'}
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                          </svg>
+                        </div>
                       )}
                       {/* Delete Button */}
                       <button
                         onClick={(e) => handleDelete(note.id, e)}
-                        className="p-2.5 text-espresso-400 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all duration-200 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20"
+                        className="p-3 text-espresso-400 hover:text-red-500 dark:text-cream-500 dark:hover:text-red-400 transition-all duration-200 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 border border-transparent hover:border-red-200 dark:hover:border-red-800"
                         aria-label={language === 'en' ? 'Delete note' : 'Notu sil'}
                         title={language === 'en' ? 'Delete note' : 'Notu sil'}
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
